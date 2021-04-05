@@ -21,20 +21,21 @@ def chooseDataset():
         return datasets
 
 
-def loadtraindata():
-    path = chooseDataset()
+def loadtraindata(path):
+    # path = chooseDataset()
     filename = path.split('/')[-1].split('_')[-1]
-    print('path:', path)
-    print('filename:', filename)
+    # print('path:', path)
+    # print('filename:', filename)
     trainset = torchvision.datasets.ImageFolder(path,
                 transform=transforms.Compose([transforms.Resize((32, 32)),  # resize image (h,w)
                 transforms.CenterCrop(32), transforms.ToTensor()]))
     print('classes: ', trainset.classes)  # all classes in dataset
+
     print(trainset)
     # batch_size: number of iteration in each time
     # shuffle: whether random sort in each time
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=True, num_workers=2)
-    return trainloader, filename
+    return trainloader, filename, tuple(trainset.classes)
 
 
 class Net(nn.Module):  # define net, which extends torch.nn.Module
@@ -60,8 +61,8 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
 
 
 
-def trainandsave():
-    trainloader, filename = loadtraindata()
+def trainandsave(path):
+    trainloader, filename, classes = loadtraindata(path)
 
     net = Net()
     net.to(DEVICE)
@@ -88,80 +89,12 @@ def trainandsave():
 
     print('Finished Training')
     # save net
-    torch.save(net, 'net_'+filename+'.pkl')  # save structure and parameter
+    # torch.save(net, 'net_'+filename+'.pkl')  # save structure and parameter
     torch.save(net.state_dict(), 'net_params_'+filename+'.pkl')  # only save parameter
 
-
-
-# test ==========================================
-
-classes_3min = ('BailinHE', 'BingyuanHUANG', 'DonghaoLI', 'DuoHAN', 'FanyuanZENG',
-           'HaoWANG', 'HaoweiLIU', 'JiahuangCHEN', 'KaihangLIU', 'LeiLIU',
-           'MengYIN', 'MingshengMA', 'NgokTingYIP', 'QidongZHAI', 'RuikaiCAI',
-           'RunzeWANG', 'ShengtongZHU', 'YalingZHANG', 'YirunCHEN', 'YuqinCHENG',
-           'ZhijingBAO', 'ZiyaoZHANG', 'ZiyiLI')
-
-classes_10min = ('BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYUk', 'HanweiCHEN',
-                 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN',
-                 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXie', 'SiqinLI',
-                 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN',
-                 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG')
-
-classes = classes_10min
-
-def loadtestdata():
-    path = chooseDataset()
-    testset = torchvision.datasets.ImageFolder(path, transform=transforms.Compose([
-            transforms.Resize((32, 32)),  # resize image (h,w)
-            transforms.ToTensor()]))
-    testloader = torch.utils.data.DataLoader(testset, batch_size=25, shuffle=True, num_workers=2)
-    return testloader
-
-def reload_net():
-    trainednet = torch.load('net_3minCopy.pkl')
-    return trainednet
-
-def imshow(img):
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    # plt.show()
-    print('plt show')
-
-def test():
-    testloader = loadtestdata()
-    print('test data loaded')
-    net = reload_net()
-    test_loss = 0
-    correct = 0
-
-    with torch.no_grad():
-        for x, y in testloader:
-            x, y = x.to(DEVICE), y.to(DEVICE)
-            output = net(x)
-            test_loss += F.nll_loss(output, y, reduction='sum').item()
-            pred = output.max(1, keepdim=True)[1]
-            correct += pred.eq(y.view_as(pred)).sum().item()
-            print('correct:', correct)
-
-    test_loss /= len(testloader.dataset)
-    print('test loss={:.4f}, accuracy={:.4f}'.format(test_loss, float(correct) / len(testloader.dataset)))
-
-    # dataiter = iter(testloader)
-    # images, labels = dataiter.next()  #
-    # os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-    # # imshow(torchvision.utils.make_grid(images, nrow=5))  # nrow is the size of image in one row
-    # print('GroundTruth: ', " ".join('%5s' % classes[labels[j]] for j in range(25)))  # print 25
-    #
-    # outputs = net(Variable(images))
-    # _, predicted = torch.max(outputs.data, 1)
-    # print('Predicted: ', " ".join('%5s' % classes[predicted[j]] for j in range(25)))
-
+    return 'net_params_'+filename+'.pkl', classes
 
 
 if __name__ == '__main__':
-    # trainandsave()
-    test()
+    trainandsave()
 
-    # marked_image_3minCopy
-    # test_loss = -24.3998, accuracy = 0.9909
