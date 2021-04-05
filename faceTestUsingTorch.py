@@ -9,96 +9,51 @@ import time
 import tkinter.filedialog
 from torchTrain import Net
 
-def chooseVideo(window_name='face recognize'):
-    root = tkinter.Tk()  # create a Tkinter.Tk() instance
-    root.withdraw()  # hide Tkinter.Tk() instance
-    video = tkinter.filedialog.askopenfilename(title=u'choose file')
-    if video == '':
-        exit()
-    else:
-        recognize_video(window_name, video)
+# def chooseVideo(name_lst, window_name='face recognize'):
+#     root = tkinter.Tk()  # create a Tkinter.Tk() instance
+#     root.withdraw()  # hide Tkinter.Tk() instance
+#     video = tkinter.filedialog.askopenfilename(title=u'choose file')
+#     if video == '':
+#         exit()
+#     else:
+#         recognize_video(name_lst, video)
 
 
-def recognize_video(window_name, video):
-    classfier = cv2.CascadeClassifier('../haarcascades/haarcascade_frontalface_default.xml')
-    classes_3min = ('BailinHE', 'BingyuanHUANG', 'DonghaoLI', 'DuoHAN', 'FanyuanZENG',
-               'HaoWANG', 'HaoweiLIU', 'JiahuangCHEN', 'KaihangLIU', 'LeiLIU',
-               'MengYIN', 'MingshengMA', 'NgokTingYIP', 'QidongZHAI', 'RuikaiCAI',
-               'RunzeWANG', 'ShengtongZHU', 'YalingZHANG', 'YirunCHEN', 'YuqinCHENG',
-               'ZhijingBAO', 'ZiyaoZHANG', 'ZiyiLI')
+def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection, time_slot):
+    classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
 
-    classes_10min = ('BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYUk', 'HanweiCHEN',
-                     'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN',
-                     'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXie', 'SiqinLI',
-                     'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN',
-                     'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG')
+    grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    face_rects = classfier.detectMultiScale(grey, scaleFactor=1.2, minNeighbors=3, minSize=(32, 32))
+    if len(face_rects) > 0:
 
-    classes = classes_10min
+        for face_rect in face_rects:
+            x, y, w, h = face_rect
+            image = frame[y - 10:y + h + 10, x - 10:x + w + 10]
+            # opencv to PIL: BGR2RGB
+            PIL_image = cv2pil(image)
+            if PIL_image is None:
+                continue
+            # using model to recognize
+            label = predict_model(PIL_image, net_path)
+            cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
+            cv2.putText(frame, classes[label], (x - 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
 
-    cv2.namedWindow(window_name)
-    cap = cv2.VideoCapture(video)
-    frameCounter = 0
-    namedict = defaultdict(list)
-    tic = time.time()
-    while cap.isOpened():
-        print('num of frame:', frameCounter)
-        ok, frame = cap.read()
-        if not ok:
-            break
-        # catch_frame = catch_face(frame)
-        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_rects = classfier.detectMultiScale(grey, scaleFactor=1.2, minNeighbors=3, minSize=(32, 32))
-        if len(face_rects) > 0:
+            if frameCounter % time_slot == 1:  # every one time slot reset
+                for k in studyCollection.keys():
+                    studyCollection[k] = 0
 
-            for face_rect in face_rects:
-                x, y, w, h = face_rect
-                image = frame[y - 10:y + h + 10, x - 10:x + w + 10]
-                # opencv to PIL: BGR2RGB
-                PIL_image = cv2pil(image)
-                if PIL_image is None:
-                    continue
-                # using model to recognize
-                label = predict_model(PIL_image)
-                cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
-                cv2.putText(frame, classes[label], (x - 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                if not namedict[classes[label]]:
-                    namedict[classes[label]].append(frameCounter)
-                    namedict[classes[label]].append(1)
-                else:
-                    namedict[classes[label]][1] += 1
-        cv2.imshow(window_name, frame)
-        # cv2.imshow(window_name, catch_frame)
-        c = cv2.waitKey(1)
-        if c & 0xFF == ord('q'):
-            break
-        frameCounter += 1
-    cap.release()
-    cv2.destroyAllWindows()
-    toc = time.time()
-    print('time: ', toc - tic)
-    for k, v in namedict.items():
-        print(str(k)+' first detected at '+str(namedict[k][0])+' frames,'+' total detect times: '+str(namedict[k][1]))
+            if not namedict[classes[label]]:
+                namedict[classes[label]].append(frameCounter)
+                namedict[classes[label]].append(1)
+            else:
+                namedict[classes[label]][1] += 1
 
-# def catch_face(frame):
-#
-#
-#     grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#     face_rects = classfier.detectMultiScale(grey, scaleFactor=1.2, minNeighbors=3, minSize=(32, 32))
-#     if len(face_rects) > 0:
-#
-#         for face_rects in face_rects:
-#             x, y, w, h = face_rects
-#             image = frame[y - 10:y + h + 10, x - 10:x + w + 10]
-#             # opencv 2 PIL格式图片
-#             PIL_image = cv2pil(image)
-#             if PIL_image is None:
-#                 continue
-#             # 使用模型进行人脸识别
-#             label = predict_model(PIL_image)
-#             cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 255, 0), 1)
-#             cv2.putText(frame, classes[label], (x - 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 1)
-#
-#     return frame
+            # get the time of this student appear in a time slot
+            studyCollection[classes[label]] += 1
+
+
+    return frame, namedict, studyCollection
+
 
 def get_transform():
     return transforms.Compose([
@@ -113,7 +68,7 @@ def cv2pil(image):
     else:
         return None
 
-def predict_model(image):
+def predict_model(image, net_path):
 
     data_transform = get_transform()
     image = data_transform(image)  # change PIL image to tensor
@@ -129,31 +84,25 @@ def predict_model(image):
     pred = output.max(1, keepdim=True)[1]
     return pred.item()
 
-# class Net(nn.Module):  # define net, which extends torch.nn.Module
-#     def __init__(self):
-#         super(Net, self).__init__()
-#         self.conv1 = nn.Conv2d(3, 6, 5)  # convolution layer
-#         self.pool = nn.MaxPool2d(2, 2)  # pooling layer
-#         self.conv2 = nn.Conv2d(6, 16, 5)  # convolution layer
-#         self.fc1 = nn.Linear(16 * 5 * 5, 120)  # fully connected layer
-#         self.fc2 = nn.Linear(120, 84)
-#         self.fc3 = nn.Linear(84, 23)  # output is 24, 24 is the number of class in dataset
-#
-#     def forward(self, x):  # feed forward
-#
-#         x = self.pool(F.relu(self.conv1(x)))  # F is torch.nn.functional
-#         x = self.pool(F.relu(self.conv2(x)))
-#         x = x.view(-1, 16 * 5 * 5)  # .view( ) is a method tensor, which automatically change tensor size but elements number not change
-#
-#         x = F.relu(self.fc1(x))
-#         x = F.relu(self.fc2(x))
-#         x = self.fc3(x)
-#         return x
+
 
 if __name__ == '__main__':
     net_path = 'net_params_10minCopy.pkl'
-    chooseVideo()
-    # recognize_video('test', )
+    classes_3min = ('BailinHE', 'BingyuanHUANG', 'DonghaoLI', 'DuoHAN', 'FanyuanZENG',
+                    'HaoWANG', 'HaoweiLIU', 'JiahuangCHEN', 'KaihangLIU', 'LeiLIU',
+                    'MengYIN', 'MingshengMA', 'NgokTingYIP', 'QidongZHAI', 'RuikaiCAI',
+                    'RunzeWANG', 'ShengtongZHU', 'YalingZHANG', 'YirunCHEN', 'YuqinCHENG',
+                    'ZhijingBAO', 'ZiyaoZHANG', 'ZiyiLI')
+
+    classes_10min = ('BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYUk', 'HanweiCHEN',
+                     'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN',
+                     'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXie', 'SiqinLI',
+                     'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN',
+                     'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG')
+
+    classes = classes_10min
+
+
 
     # 3min result:
     # DonghaoLI first detected at 0 frames, total detect times: 2131
