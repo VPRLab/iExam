@@ -5,7 +5,7 @@ import tkinter.filedialog
 import pytesseract
 import difflib
 
-def chooseVideo( window_name='test for detecting face by video'):
+def chooseVideo(name_lst, window_name='test for detecting face by video'):
     root = tkinter.Tk()  # create a Tkinter.Tk() instance
     root.withdraw()  # hide Tkinter.Tk() instance
     video = tkinter.filedialog.askopenfilename(title=u'choose file')
@@ -13,38 +13,15 @@ def chooseVideo( window_name='test for detecting face by video'):
 
 
     if video != '':
-        CatchVideo(window_name, video, dataset)
+        CatchVideo(window_name, video, dataset, name_lst)
 
-def CatchVideo(window_name, video, dataset):
+def CatchVideo(window_name, video, dataset, name_lst):
     # cv2.namedWindow(window_name)
     cap = cv2.VideoCapture(video)
     classfier = cv2.CascadeClassifier("../haarcascades/haarcascade_frontalface_default.xml")
     pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
 
     num_frame = 1
-    # name_lst = ("AnboWANG", "BailinHE", "BingHU", "BingyuanHUANG", "BowenFAN",
-    #             "ChenghaoLYUk", "JiayiHOU", "DonghaoLI", "DuoHAN", "YuqinCHENG",
-    #             "FanyuanZENG", "MengYIN", "HiuYanTONG", "GuozhengCHEN", "HanweiCHEN",
-    #             "HaoWANG", "HaoweiLIU", "JiahuangCHEN", "KaihangLIU", "YuanTIAN",
-    #             "LeiLIU", "LiujiaDU", "LiZHANG", "MingshengMA", "NgokTingYIP",
-    #             "PakKwanCHAN", "QianqianCAO", "QidongZHAI", "QijieCHEN", "QingboLI",
-    #             "RouwenGE", "RuiGUO", "RuikaiCAI", "RunzeWANG", "RuochenXie",
-    #             "ShengtongZHU", "SiqinLI", "SiruiLI", "SuweiSUN", "TszKuiCHOW",
-    #             "YalingZHANG", "YanWU", "YimingZOU", "YirunCHEN", "YuchuanWANG",
-    #             "YuMingCHAN", "ZhijingBAO", "ZicongZHENG", "ZiwenLU", "ZiyaoZHANG",
-    #             "ZiyiLI")
-    name_lst = ('ZhijingBAO', 'RuikaiCAI', 'KexinCAO', 'QianqianCAO', 'PakKwanCHAN',
-                 'YuMingCHAN', 'GuozhengCHEN', 'HanweiCHEN', 'JiahuangCHEN', 'JiaxianCHEN',
-                 'QijieCHEN', 'YirunCHEN', 'YuqinCHENG', 'TszKuiCHOW', 'LiujiaDU',
-                 'BowenFAN', 'RouwenGE', 'RuiGUO', 'DuoHAN', 'YouyangHAN',
-                 'BailinHE', 'JiayiHOU', 'BingHU', 'BingyuanHUANG', 'HoNamLAI',
-                 'DonghaoLI', 'QingboLI', 'SiqinLI', 'SiruiLI', 'ZiyiLI',
-                 'HaoweiLIU', 'JinzhangLIU', 'KaihangLIU', 'LeiLIU', 'ZiwenLU',
-                 'KuanLV', 'ChenghaoLYU', 'MingshengMA', 'SuweiSUN', 'YuanTIAN',
-                 'HiuYanTONG', 'AnboWANG', 'HaoWANG', 'RunzeWANG', 'YuchuanWANG',
-                 'YanWU', 'RuochenXIE', 'MengYIN', 'ZijingYIN', 'NgokTingYIP',
-                 'FanyuanZENG', 'QidongZHAI', 'LiZHANG', 'YalingZHANG', 'ZiyaoZHANG',
-                 'ZicongZHENG', 'ShengtongZHU', 'YifanZHU', 'YimingZOU')
 
     # remove historical folder
     if os.path.exists(dataset):
@@ -118,7 +95,30 @@ def string_comparison(text, name_lst):  # get rid of small difference of OCR for
         return simlar_str
 
 if __name__ == '__main__':
-    chooseVideo()
+    # name_lst = ("AnboWANG", "BailinHE", "BingHU", "BingyuanHUANG", "BowenFAN",
+    #             "ChenghaoLYUk", "JiayiHOU", "DonghaoLI", "DuoHAN", "YuqinCHENG",
+    #             "FanyuanZENG", "MengYIN", "HiuYanTONG", "GuozhengCHEN", "HanweiCHEN",
+    #             "HaoWANG", "HaoweiLIU", "JiahuangCHEN", "KaihangLIU", "YuanTIAN",
+    #             "LeiLIU", "LiujiaDU", "LiZHANG", "MingshengMA", "NgokTingYIP",
+    #             "PakKwanCHAN", "QianqianCAO", "QidongZHAI", "QijieCHEN", "QingboLI",
+    #             "RouwenGE", "RuiGUO", "RuikaiCAI", "RunzeWANG", "RuochenXie",
+    #             "ShengtongZHU", "SiqinLI", "SiruiLI", "SuweiSUN", "TszKuiCHOW",
+    #             "YalingZHANG", "YanWU", "YimingZOU", "YirunCHEN", "YuchuanWANG",
+    #             "YuMingCHAN", "ZhijingBAO", "ZicongZHENG", "ZiwenLU", "ZiyaoZHANG",
+    #             "ZiyiLI")
+    name_lst_full = ('ZhijingBAO', 'RuikaiCAI', 'KexinCAO', 'QianqianCAO', 'PakKwanCHAN',
+                'YuMingCHAN', 'GuozhengCHEN', 'HanweiCHEN', 'JiahuangCHEN', 'JiaxianCHEN',
+                'QijieCHEN', 'YirunCHEN', 'YuqinCHENG', 'TszKuiCHOW', 'LiujiaDU',
+                'BowenFAN', 'RouwenGE', 'RuiGUO', 'DuoHAN', 'YouyangHAN',
+                'BailinHE', 'JiayiHOU', 'BingHU', 'BingyuanHUANG', 'HoNamLAI',
+                'DonghaoLI', 'QingboLI', 'SiqinLI', 'SiruiLI', 'ZiyiLI',
+                'HaoweiLIU', 'JinzhangLIU', 'KaihangLIU', 'LeiLIU', 'ZiwenLU',
+                'KuanLV', 'ChenghaoLYU', 'MingshengMA', 'SuweiSUN', 'YuanTIAN',
+                'HiuYanTONG', 'AnboWANG', 'HaoWANG', 'RunzeWANG', 'YuchuanWANG',
+                'YanWU', 'RuochenXIE', 'MengYIN', 'ZijingYIN', 'NgokTingYIP',
+                'FanyuanZENG', 'QidongZHAI', 'LiZHANG', 'YalingZHANG', 'ZiyaoZHANG',
+                'ZicongZHENG', 'ShengtongZHU', 'YifanZHU', 'YimingZOU')
+    chooseVideo(name_lst=name_lst_full)
 
     # file_num2.pop(13)
     # file_num2.append(0)
