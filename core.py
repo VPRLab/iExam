@@ -1,9 +1,9 @@
 # Yang Xu
 
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.uic import loadUi
-from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor, QRegExpValidator
+from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor
 
 import sys
 import cv2
@@ -113,18 +113,14 @@ class core(QWidget):
 
 
     def chooseRosterPath(self):
-        root = tkinter.Tk()  # create a Tkinter.Tk() instance
-        root.withdraw()  # hide Tkinter.Tk() instance
-        roster_path = tkinter.filedialog.askopenfilename(title=u'choose file')
-        if len(roster_path)>0:  # path is not None, then read roster content
-            roster = open(roster_path, "r")
+        fileName, filetype = QFileDialog.getOpenFileName(self, "choose roster", os.getcwd(), "Text Files (*.txt)")
+
+        if len(fileName)>0:  # path is not None, then read roster content
+            roster = open(fileName, "r")
             self.name_lst = tuple(roster.read().splitlines())
 
     def chooseVideo(self):
-        root = tkinter.Tk()  # create a Tkinter.Tk() instance
-        root.withdraw()  # hide Tkinter.Tk() instance
-        self.video = tkinter.filedialog.askopenfilename(title=u'choose file')
-
+        self.video, filetype = QFileDialog.getOpenFileName(self, "choose video", os.getcwd(), "All Files (*)")
 
     def catchVideo(self):
         self.chooseVideo()
