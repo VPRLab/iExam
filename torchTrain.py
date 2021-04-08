@@ -30,6 +30,7 @@ def loadtraindata(path):
                 transform=transforms.Compose([transforms.Resize((32, 32)),  # resize image (h,w)
                 transforms.CenterCrop(32), transforms.ToTensor()]))
     print('classes: ', trainset.classes)  # all classes in dataset
+    print('number of classes: ', len(trainset.classes))
 
     print(trainset)
     # batch_size: number of iteration in each time
@@ -39,14 +40,14 @@ def loadtraindata(path):
 
 
 class Net(nn.Module):  # define net, which extends torch.nn.Module
-    def __init__(self):
+    def __init__(self, class_num):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)  # convolution layer
         self.pool = nn.MaxPool2d(2, 2)  # pooling layer
         self.conv2 = nn.Conv2d(6, 16, 5)  # convolution layer
         self.fc1 = nn.Linear(16 * 5 * 5, 120)  # fully connected layer
         self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 24)  # output is 24, 24 is the number of class in dataset
+        self.fc3 = nn.Linear(84, class_num)  # output is class_num, class_num is the number of class in dataset
 
     def forward(self, x):  # feed forward
 
@@ -64,7 +65,7 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
 def trainandsave(path):
     trainloader, filename, classes = loadtraindata(path)
 
-    net = Net()
+    net = Net(len(classes))
     net.to(DEVICE)
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)  # learning rate=0.001
     criterion = nn.CrossEntropyLoss()  # loss function
