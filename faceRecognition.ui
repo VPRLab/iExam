@@ -155,7 +155,7 @@
            </font>
           </property>
           <property name="text">
-           <string>choose roster path</string>
+           <string>select roster path</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
@@ -165,7 +165,7 @@
         <item>
          <widget class="QPushButton" name="uploadVideoButton">
           <property name="enabled">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
           <property name="font">
            <font>
@@ -177,7 +177,7 @@
            </font>
           </property>
           <property name="text">
-           <string>choose video path</string>
+           <string>select training video</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
@@ -187,7 +187,7 @@
         <item>
          <widget class="QPushButton" name="traindataButton">
           <property name="enabled">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
           <property name="font">
            <font>
@@ -199,7 +199,7 @@
            </font>
           </property>
           <property name="text">
-           <string>training dataset</string>
+           <string>start training dataset</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
@@ -209,7 +209,7 @@
         <item>
          <widget class="QPushButton" name="faceRecognitionButton">
           <property name="enabled">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
           <property name="font">
            <font>
@@ -221,7 +221,7 @@
            </font>
           </property>
           <property name="text">
-           <string>start recognition</string>
+           <string>select test video and run</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
