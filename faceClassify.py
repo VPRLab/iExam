@@ -3,12 +3,16 @@ import os
 import shutil
 import pytesseract
 import difflib
+import platform
 
 
 def catchFaceAndClassify(dataset, name_lst, frame, num_frame):
 
     classfier = cv2.CascadeClassifier("./haarcascades/haarcascade_frontalface_default.xml")
-    pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
+    if platform.system() == 'Windows':
+        pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
+    elif platform.system() == 'Darwin':
+        pytesseract.pytesseract.tesseract_cmd = '/usr/local/bin/tesseract'
 
     grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # change to greystyle
     faceRects = classfier.detectMultiScale(frame, 1.1, 5, minSize=(8, 8))   # objects are returned as a list of rectangles.
