@@ -34,9 +34,9 @@ def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection,
             if PIL_image is None:
                 continue
             # using model to recognize
-            label = predict_model(PIL_image, net_path)
+            label = predict_model(PIL_image, net_path, len(classes))
             cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
-            cv2.putText(frame, classes[label], (x - 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, classes[label], (x - 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
 
             if frameCounter % time_slot == 1:  # every one time slot reset
                 for k in studyCollection.keys():
@@ -68,12 +68,12 @@ def cv2pil(image):
     else:
         return None
 
-def predict_model(image, net_path):
+def predict_model(image, net_path, class_num):
 
     data_transform = get_transform()
     image = data_transform(image)  # change PIL image to tensor
     image = image.view(-1, 3, 32, 32)
-    net = Net()
+    net = Net(class_num)
     # net = torch.load(net_path)
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(DEVICE)
