@@ -1,6 +1,6 @@
 # iExam
 
-% python3 core.py
+After installing the necessary packages, you can run iExam via "python3 core.py".
 
 # Install on Mac
 - % sudo python3 -m pip install PyQt5
