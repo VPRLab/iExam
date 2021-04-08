@@ -62,12 +62,21 @@ def OCRprocessing(dataset, name_lst):
                 except Exception:
                     pass
 
-    # delete empty folder and not in name_lst
+    # delete empty folder
     try:
         dirs = os.listdir(dataset)
         for dir in dirs:
-            if len(os.listdir(dataset+"/"+dir)) == 0 or dir not in name_lst:
+            if len(os.listdir(dataset+"/"+dir)) == 0:
                 os.removedirs(dataset+"/"+dir)
+    except Exception:
+        pass
+
+    # remove subfolder whose name not in name_lst
+    try:
+        dirs = os.listdir(dataset)
+        for dir in dirs:
+            if dir not in name_lst:
+                shutil.rmtree(dataset + "/" + dir)
     except Exception:
         pass
 
