@@ -3,7 +3,8 @@
 from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.uic import loadUi
-from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor
+from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor, QFont, QColor
+
 
 import sys
 import cv2
@@ -15,7 +16,6 @@ import faceClassify  # test face in one frame
 import torchTrain  # train by torch
 import preProcess  # OCR post processing
 import faceTestUsingTorch  # face recognition
-import tkinter.filedialog
 import shutil
 from collections import defaultdict
 
@@ -60,6 +60,8 @@ class core(QWidget):
         self.net_path = None
         self.name_lst = None
 
+        # self.traindataButton.setEnabled(True)  # use to test train function, after need to delete
+
 
         # self.dataset = 'marked_image_10minCopy'
         # self.net_path = 'net_params_10minCopy.pkl'
@@ -89,6 +91,7 @@ class core(QWidget):
             self.uploadRosterButton.setEnabled(False)
             self.logQueue.put('Success: uploadRoster')
             self.isFinishUpload = True
+            self.uploadVideoButton.setEnabled(True)
         else:
             self.logQueue.put('Warning: not upload roster')
 
@@ -99,13 +102,26 @@ class core(QWidget):
 
     # training classified images by torch
     def trainData(self):
+
+        # self.dataset = 'marked_image_8min'  # use to test train function, after need to delete
+
         self.logQueue.put('Start preprocessing')
+        self.logQueue.put('Please waiting ...')
         preProcess.OCRprocessing(self.dataset, self.name_lst)
         self.logQueue.put('Finish preprocessing')
+        self.logQueue.put('Start training')
+        if len(os.listdir(self.dataset)) < 10:
+            self.uploadVideoButton.setEnabled(True)
+            self.traindataButton.setEnabled(False)
+            shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
+            self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
+            return
+
         self.net_path, self.name_lst = torchTrain.trainandsave(self.dataset)
         self.logQueue.put('Success: trainData')
         self.traindataButton.setEnabled(False)
         self.isFinishTrain = True
+        self.faceRecognitionButton.setEnabled(True)
 
     def faceRecognition(self):
         # self.logQueue.put('Start face recognition')
@@ -128,6 +144,7 @@ class core(QWidget):
             self.uploadVideoButton.setEnabled(False)
             self.logQueue.put('Success: upload training video')
             self.logQueue.put('Start to construct dataset')
+            self.logQueue.put('Please waiting ...')
         else:
             self.logQueue.put('Warning: please upload training video')
             return
@@ -160,6 +177,7 @@ class core(QWidget):
             cv2.waitKey(1)
         self.logQueue.put('Success: finish data collection')
         self.isFinishClassify = True
+        self.traindataButton.setEnabled(True)
 
     def testVideo(self):
         self.chooseVideo()
@@ -269,9 +287,22 @@ class core(QWidget):
     def logOutput(self, log_received):
         # get current time
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-        log = time + '\n' + log_received + '\n'
+        # log = time + '\n' + log_received + '\n'
         self.logTextEdit.moveCursor(QTextCursor.End)  # move cursor to the end
-        self.logTextEdit.insertPlainText(log)  # insert the text
+        if 'waiting' in log_received:
+            self.logTextEdit.insertPlainText(time + '\n')
+            self.logTextEdit.setFontWeight(QFont.Bold)  # change font style to bold
+            self.logTextEdit.insertPlainText(log_received)  # insert the text
+            self.logTextEdit.setFontWeight(QFont.Normal)  # change font style back to normal
+            self.logTextEdit.insertPlainText('\n')
+        elif 'Warning' in log_received:
+            self.logTextEdit.insertPlainText(time + '\n')
+            self.logTextEdit.setTextColor(QColor(255,0,0))  # change font color to red
+            self.logTextEdit.insertPlainText(log_received)  # insert the text
+            self.logTextEdit.setTextColor(QColor(0,0,0))  # change font color back to black
+            self.logTextEdit.insertPlainText('\n')
+        else:
+            self.logTextEdit.insertPlainText(time + '\n' + log_received + '\n')  # insert the text
         self.logTextEdit.ensureCursorVisible()  # by scrolling text make cursor visible
 
 
