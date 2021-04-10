@@ -14,7 +14,11 @@ After installing the necessary packages, you can run iExam via "python3 core.py"
   See https://brew.sh/, https://guides.library.illinois.edu/c.php?g=347520&p=4121425 and https://tesseract-ocr.github.io/tessdoc/Installation.html
 - *Maybe* need to explicitly install the tesseract language package: % brew install tesseract-lang (installing tesseract-eng failed).
 
-# Install on Windows (using power shell)
+# Install on Windows (using terminal)
+install virtualenv using pip: pip install virtualenv <br>
+create loacl virtual environment: virtualenv env <br>
+go to the path <b>/env/Scripts</b>, activate env using: <b>activate</b> <br>
+- install relative python packages using pip: <br>
 - % pip install PyQt5
 - % pip install opencv-python
 - % pip install pytesseract
