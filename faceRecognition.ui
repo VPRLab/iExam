@@ -97,9 +97,9 @@
        <property name="geometry">
         <rect>
          <x>0</x>
-         <y>290</y>
+         <y>230</y>
          <width>281</width>
-         <height>311</height>
+         <height>371</height>
         </rect>
        </property>
        <property name="title">
@@ -114,7 +114,7 @@
           <x>0</x>
           <y>30</y>
           <width>281</width>
-          <height>281</height>
+          <height>341</height>
          </rect>
         </property>
         <property name="font">
@@ -134,9 +134,9 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>40</y>
+         <y>30</y>
          <width>271</width>
-         <height>231</height>
+         <height>191</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout">
@@ -177,29 +177,8 @@
            </font>
           </property>
           <property name="text">
-           <string>select training video</string>
-          </property>
-          <property name="checkable">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="traindataButton">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="font">
-           <font>
-            <family>Yu Gothic UI Semibold</family>
-            <pointsize>12</pointsize>
-            <weight>75</weight>
-            <bold>true</bold>
-            <kerning>true</kerning>
-           </font>
-          </property>
-          <property name="text">
-           <string>start training dataset</string>
+           <string>select training video
+and training dataset</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
