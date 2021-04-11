@@ -2,21 +2,7 @@ import cv2
 from PIL import Image
 import torch
 import torchvision.transforms as transforms
-import torch.nn as nn
-import torch.nn.functional as F
-from collections import defaultdict
-import time
-import tkinter.filedialog
 from torchTrain import Net
-
-# def chooseVideo(name_lst, window_name='face recognize'):
-#     root = tkinter.Tk()  # create a Tkinter.Tk() instance
-#     root.withdraw()  # hide Tkinter.Tk() instance
-#     video = tkinter.filedialog.askopenfilename(title=u'choose file')
-#     if video == '':
-#         exit()
-#     else:
-#         recognize_video(name_lst, video)
 
 
 def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection, time_slot):
@@ -85,73 +71,3 @@ def predict_model(image, net_path, class_num):
     return pred.item()
 
 
-
-if __name__ == '__main__':
-    net_path = 'net_params_10minCopy.pkl'
-    classes_3min = ('BailinHE', 'BingyuanHUANG', 'DonghaoLI', 'DuoHAN', 'FanyuanZENG',
-                    'HaoWANG', 'HaoweiLIU', 'JiahuangCHEN', 'KaihangLIU', 'LeiLIU',
-                    'MengYIN', 'MingshengMA', 'NgokTingYIP', 'QidongZHAI', 'RuikaiCAI',
-                    'RunzeWANG', 'ShengtongZHU', 'YalingZHANG', 'YirunCHEN', 'YuqinCHENG',
-                    'ZhijingBAO', 'ZiyaoZHANG', 'ZiyiLI')
-
-    classes_10min = ('BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYUk', 'HanweiCHEN',
-                     'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN',
-                     'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXie', 'SiqinLI',
-                     'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN',
-                     'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG')
-
-    classes = classes_10min
-
-
-
-    # 3min result:
-    # DonghaoLI first detected at 0 frames, total detect times: 2131
-    # NgokTingYIP first detected at 0 frames, total detect times: 3344
-    # DuoHAN first detected at 0 frames, total detect times: 4330
-    # ZhijingBAO first detected at 0 frames, total detect times: 4359
-    # YuqinCHENG first detected at 0 frames, total detect times: 825
-    # YalingZHANG first detected at 2 frames, total detect times: 2350
-    # QidongZHAI first detected at 12 frames, total detect times: 2128
-    # BingyuanHUANG first detected at 21 frames, total detect times: 2827
-    # HaoweiLIU first detected at 28 frames, total detect times: 1695
-    # RuikaiCAI first detected at 38 frames, total detect times: 231
-    # JiahuangCHEN first detected at 42 frames, total detect times: 3190
-    # MingshengMA first detected at 76 frames, total detect times: 1072
-    # MengYIN first detected at 78 frames, total detect times: 4418
-    # HaoWANG first detected at 146 frames, total detect times: 4621
-    # YirunCHEN first detected at 206 frames, total detect times: 1262
-    # ZiyaoZHANG first detected at 208 frames, total detect times: 3057
-    # ShengtongZHU first detected at 211 frames, total detect times: 1040
-    # LeiLIU first detected at 312 frames, total detect times: 972
-    # RunzeWANG first detected at 331 frames, total detect times: 4170
-    # ZiyiLI first detected at 465 frames, total detect times: 3511
-    # KaihangLIU first detected at 586 frames, total detect times: 259
-    # BailinHE first detected at 788 frames, total detect times: 3387
-    # FanyuanZENG first detected at 2372 frames, total detect times: 417
-
-    # 10min result:
-    # time:  4299.933976173401
-    # SiruiLI first detected at 0 frames, total detect times: 15990
-    # YanWU first detected at 0 frames, total detect times: 7295
-    # BailinHE first detected at 0 frames, total detect times: 12745
-    # YuanTIAN first detected at 0 frames, total detect times: 28373
-    # RuiGUO first detected at 0 frames, total detect times: 17148
-    # ZiyaoZHANG first detected at 0 frames, total detect times: 12779
-    # ChenghaoLYUk first detected at 0 frames, total detect times: 13028
-    # LiujiaDU first detected at 0 frames, total detect times: 22317
-    # JiahuangCHEN first detected at 0 frames, total detect times: 772
-    # QijieCHEN first detected at 0 frames, total detect times: 7595
-    # YuMingCHAN first detected at 0 frames, total detect times: 14549
-    # RouwenGE first detected at 0 frames, total detect times: 9147
-    # HanweiCHEN first detected at 0 frames, total detect times: 13456
-    # RunzeWANG first detected at 0 frames, total detect times: 16500
-    # YuchuanWANG first detected at 6 frames, total detect times: 10224
-    # ZiwenLU first detected at 16 frames, total detect times: 5397
-    # RuochenXie first detected at 27 frames, total detect times: 6009
-    # BowenFAN first detected at 79 frames, total detect times: 5759
-    # TszKuiCHOW first detected at 81 frames, total detect times: 11198
-    # SiqinLI first detected at 230 frames, total detect times: 5317
-    # PakKwanCHAN first detected at 242 frames, total detect times: 7305
-    # LiZHANG first detected at 388 frames, total detect times: 5240
-    # BingHU first detected at 591 frames, total detect times: 10751
-    # YimingZOU first detected at 874 frames, total detect times: 4335
