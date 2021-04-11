@@ -45,7 +45,6 @@ class core(QWidget):
         self.isFinishClassify = False
         self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video
         self.isFinishTrain = False
-        self.traindataButton.clicked.connect(self.trainData)  # training classified images
         self.isFinishTest = False
         self.faceRecognitionButton.clicked.connect(self.faceRecognition)  # training classified images
 
@@ -60,8 +59,6 @@ class core(QWidget):
         self.net_path = None
         self.name_lst = None
 
-        # self.traindataButton.setEnabled(True)  # use to test train function, after need to delete
-
 
         # self.dataset = 'marked_image_10minCopy'
         # self.net_path = 'net_params_10minCopy.pkl'
@@ -73,21 +70,22 @@ class core(QWidget):
 
 
         # cascade classifier
-        # self.faceCascade = cv2.CascadeClassifier('../lbpcascades/lbpcascade_frontalface.xml')
-        # self.faceCascade = cv2.CascadeClassifier('../lbpcascades/lbpcascade_profileface.xml')
-        self.faceCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_frontalface_default.xml') #ok
-        # self.eyeCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_eye.xml')
-        # self.faceCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_frontalface_alt.xml')
-        # self.faceCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_frontalface_alt_tree.xml')
-        # self.faceCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_frontalface_alt2.xml') # fast haar
-        # self.eyeCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_lefteye_2splits.xml')
-        # self.eyeCascade = cv2.CascadeClassifier('../haarcascades/haarcascade_righteye_2splits.xml')
+        # self.faceCascade = cv2.CascadeClassifier('./lbpcascades/lbpcascade_frontalface.xml')
+        # self.faceCascade = cv2.CascadeClassifier('./lbpcascades/lbpcascade_profileface.xml')
+        self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml') #ok
+        # self.eyeCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_eye.xml')
+        # self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt.xml')
+        # self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt_tree.xml')
+        # self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt2.xml') # fast haar
+        # self.eyeCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_lefteye_2splits.xml')
+        # self.eyeCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_righteye_2splits.xml')
 
     # upload all students roster
     def uploadRoster(self):
         self.chooseRosterPath()
-        print('name_lst:', self.name_lst)
+
         if self.name_lst is not None:
+            print('name_lst:', self.name_lst)
             self.uploadRosterButton.setEnabled(False)
             self.logQueue.put('Success: uploadRoster')
             self.isFinishUpload = True
@@ -99,27 +97,28 @@ class core(QWidget):
     def uploadVideo(self):
         self.catchVideo()
         self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
+        if self.isFinishClassify:
+            self.trainData()
+
 
     # training classified images by torch
     def trainData(self):
 
-        # self.dataset = 'marked_image_8min'  # use to test train function, after need to delete
-
         self.logQueue.put('Start preprocessing')
         self.logQueue.put('Please waiting ...')
         preProcess.OCRprocessing(self.dataset, self.name_lst)
-        self.logQueue.put('Finish preprocessing')
-        self.logQueue.put('Start training')
         if len(os.listdir(self.dataset)) < 10:
             self.uploadVideoButton.setEnabled(True)
-            self.traindataButton.setEnabled(False)
             shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
             self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
+            self.dataset = None
+            self.num_frame = 1  # reset frame number
             return
 
+        self.logQueue.put('Finish preprocessing')
+        self.logQueue.put('Start training')
         self.net_path, self.name_lst = torchTrain.trainandsave(self.dataset)
         self.logQueue.put('Success: trainData')
-        self.traindataButton.setEnabled(False)
         self.isFinishTrain = True
         self.faceRecognitionButton.setEnabled(True)
 
@@ -148,6 +147,7 @@ class core(QWidget):
         else:
             self.logQueue.put('Warning: please upload training video')
             return
+
         self.dataset = 'marked_image_' + self.video.split('/')[-1].split('_')[0]
         self.cap = cv2.VideoCapture(self.video)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -177,7 +177,7 @@ class core(QWidget):
             cv2.waitKey(1)
         self.logQueue.put('Success: finish data collection')
         self.isFinishClassify = True
-        self.traindataButton.setEnabled(True)
+
 
     def testVideo(self):
         self.chooseVideo()
