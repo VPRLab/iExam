@@ -169,7 +169,7 @@ class core(QWidget):
                 self.cap.release()
                 break
 
-            print('the number of captured frame：' + str(self.num_frame))
+            print('the number of captured frame: ' + str(self.num_frame))
             image = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, frame, self.num_frame)
             self.displayImage(image)
 
@@ -206,7 +206,7 @@ class core(QWidget):
                 self.cap.release()
                 break
 
-            print('the number of captured frame：' + str(self.num_frame))
+            print('the number of captured frame: ' + str(self.num_frame))
             image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, frame, namedict, self.num_frame,
                                                                             self.net_path, studyCollection, time_slot)
             self.displayImage(image)
@@ -257,7 +257,7 @@ class core(QWidget):
     # display image
     def displayImage(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # opencv use BGR as default color and change to RGB
-        # default：The image is stored using 8-bit indexes into a colormap， for example：a gray image
+        # default: The image is stored using 8-bit indexes into a colormap, for example: a gray image
         qformat = QImage.Format_Indexed8
 
         if len(img.shape) == 3:  # shape[0]:height, shape[1]:width, shape[2]:channels
@@ -266,7 +266,7 @@ class core(QWidget):
             else:
                 qformat = QImage.Format_RGB888
 
-        # strides[0]：byte per line, strides[1]：byte per pixel, strides[2]：byte per channel
+        # strides[0]: byte per line, strides[1]: byte per pixel, strides[2]: byte per channel
         outImage = QImage(img, img.shape[1], img.shape[0], img.strides[0], qformat)
         self.faceDetectCaptureLabel.setPixmap(QPixmap.fromImage(outImage))
         self.faceDetectCaptureLabel.setScaledContents(True)
