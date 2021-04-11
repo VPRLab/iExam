@@ -5,20 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
-import matplotlib.pyplot as plt
-import numpy as np
-import os
-import tkinter.filedialog
+
+
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-def chooseDataset():
-    root = tkinter.Tk()  # create a Tkinter.Tk() instance
-    root.withdraw()  # hide Tkinter.Tk() instance
-    datasets = tkinter.filedialog.askdirectory(title=u'choose file')  # choose dataset path
-    if datasets == '':
-        exit()
-    else:
-        return datasets
 
 
 def loadtraindata(path):
@@ -96,6 +86,4 @@ def trainandsave(path):
     return 'net_params_'+filename+'.pkl', classes
 
 
-if __name__ == '__main__':
-    trainandsave()
 
