@@ -125,8 +125,7 @@ class VideoTestThread(QThread):
 
 
 class App(QWidget):
-    change_pixmap_signal = pyqtSignal(np.ndarray)
-    log_queue = pyqtSignal(str)
+
     receiveLogSignal = pyqtSignal(str)  # Log signal
 
     def __init__(self):
