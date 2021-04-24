@@ -7,9 +7,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 
 
-
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 def loadtraindata(path):
     # path = chooseDataset()
@@ -62,6 +60,7 @@ def trainandsave(path):
     # training part
     for epoch in range(5):  # 5 epoch
         # each epoch train all images, so total train 5 times
+        net.train(True)
         running_loss = 0.0  # loss output, training 200 images will output running_loss
         for i, (inputs, labels) in enumerate(trainloader):
             # wrap them in Variable, Variable will recode all operation for tensors
@@ -81,9 +80,11 @@ def trainandsave(path):
     print('Finished Training')
     # save net
     # torch.save(net, 'net_'+filename+'.pkl')  # save structure and parameter
-    torch.save(net.state_dict(), 'net_params_'+filename+'.pkl')  # only save parameter
+    torch.save(net.state_dict(), 'net_params_'+filename+'.pth')  # only save parameter
 
-    return 'net_params_'+filename+'.pkl', classes
+    return 'net_params_'+filename+'.pth', classes
 
 
-
+if __name__=="__main__":
+    path = 'marked_image_8min'
+    trainandsave(path)
