@@ -18,6 +18,9 @@ import os
 import torchTrain
 
 
+
+
+
 class Evaluation(QWidget):
 
     def __init__(self):
@@ -53,7 +56,7 @@ class Evaluation(QWidget):
     def reload_net(self):
         print('len of list: ', len(self.name_lst))
         model = torchTrain.Net(len(self.name_lst))
-        model.load_state_dict(torch.load('net_params_5min_of90min.pth'))
+        model.load_state_dict(torch.load('net_params_5min_of10min.pth'))
         model.eval()
         return model
 
@@ -81,10 +84,25 @@ class Evaluation(QWidget):
         test_loss /= len(testloader.dataset)
         print('test loss={:.4f}, accuracy={:.4f}'.format(test_loss, float(correct) / len(testloader.dataset)))
 
+    # find the longest consecutive sequence
+    def findLongest(self, nums):
+        if nums == []:
+            return 0
+        nums.sort()
+        maxlen = 1
+        curlen = 1
+        for i in range(1, len(nums)):
+            if nums[i] == nums[i - 1] + 1:
+                curlen += 1
+                maxlen = max(maxlen, curlen)
+            else:
+                maxlen = max(maxlen, curlen)
+                curlen = 1
+        return maxlen
 
     def drawGraph(self):
         # draw a bar chart to show all reg times
-        file = open("feedback_25min_of30min.txt", 'r')
+        file = open("feedback_90min_of90min.txt", 'r')
         lines = file.readlines()
         all_reg_times = {}
         for idx, line in enumerate(lines):
@@ -113,12 +131,12 @@ class Evaluation(QWidget):
         plt.tick_params(axis='y', labelsize=7)  # set ylabel size
         plt.xlabel('Recognition Times')
         plt.barh(lst_data_name, lst_data_num)
-        plt.title('conclusion of recognition times for 25min test video')
-        plt.savefig('feedback_conclusion.png')
-        plt.show()
+        plt.title('conclusion of recognition times for 90min test video')
+        # plt.savefig('feedback_conclusion_90min.png')
+        # plt.show()
 
         # draw a graph according present distribution
-        file = open("systemLog_25min_of30min.txt", 'r')
+        file = open("systemLog_90min_of90min.txt", 'r')
         lines = file.readlines()
         all_log_time = {}
         all_log_name = {}
@@ -150,6 +168,7 @@ class Evaluation(QWidget):
 
         time_slot = None
         color_lst = []
+
         for key in all_log_time.keys():
             tmp_lst = []
             for i in range(len(lst_data_name)):
@@ -159,6 +178,7 @@ class Evaluation(QWidget):
                 idx = lst_data_name.index(name)
                 tmp_lst[idx] = 'r'
             color_lst.append(tmp_lst)
+
 
         print('color: ', color_lst)
 
@@ -187,10 +207,53 @@ class Evaluation(QWidget):
             bottom = np.add(x, bottom)
 
         plt.xticks(ind, bar_categories)
-        plt.xlabel("Stacked Bar Plot")
-        plt.title('recognition distribution')
-        plt.savefig('systemLog_conclusion.png')
+        plt.title('recognition distribution for 90min test video')
+        # plt.savefig('systemLog_conclusion_90min.png')
         plt.show()
+
+
+        # draw a diagram with priority (max disappear in continuous time)
+
+        priority_dict = {}
+        result = {}
+        for name in lst_data_name:
+            priority_dict[name] = []
+            result[name] = 0
+        tmp_idx = 1
+
+        for key in all_log_name.keys():
+            for item in all_log_name[key]:
+                priority_dict[item].append(tmp_idx)
+            tmp_idx += 1
+        print('priority_dict: ', priority_dict)
+
+        for key in priority_dict.keys():
+            result[key] = self.findLongest(priority_dict[key])
+        sorted_result = sorted(result.items(), key=lambda x: x[1], reverse=True)
+        print(sorted_result)
+
+        for i in range(len(sorted_result)):
+            sorted_result[i] = list(sorted_result[i])
+            sorted_result[i][1] = time_slot * sorted_result[i][1]
+        print(sorted_result)
+
+        plt.figure(figsize=(12, 6))  # set figure size
+        plt.tick_params(axis='x', labelsize=7)  # set xlabel size
+        plt.xticks(rotation=35)
+        plt.ylabel('Time(seconds)')
+        plt.title('Consecutive disappear time for 90min test video')
+
+        tmp_name = []
+        tmp_data = []
+        for i in range(len(sorted_result)):
+            tmp_name.append(sorted_result[i][0])
+            tmp_data.append(sorted_result[i][1])
+        plt.bar(tmp_name, tmp_data)
+
+        plt.savefig('consecutive_disappear_90min.png')
+        plt.show()
+
+
 
 
 if __name__ == '__main__':
