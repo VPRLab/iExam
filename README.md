@@ -1,18 +1,30 @@
 # iExam
-
-After installing the necessary packages, you can run iExam via "python3 core.py".
+create a new directory using "mkdir dir_name" <br>
+cd dir_name <br>
+git clone https://github.com/VPRLab/iExam.git <br>
+install virtualenv: pip install virtualenv <br>
+create loacl virtual environment: virtualenv env <br>
+activate local environment <br>
+use "pip install -r requirements.txt" to install all packages <br>
+After installing the necessary packages, you can run iExam via "python3 core_os_version.py". <br>
+Details for different platforms shown below
+---
 
 # Install on Mac
-- % sudo python3 -m pip install PyQt5
-- % sudo python3 -m pip install opencv-python
-- % sudo python3 -m pip install pytesseract
-- % sudo python3 -m pip install torch
-- % sudo python3 -m pip install torchvision
-- % sudo python3 -m pip install matplotlib
+install virtualenv: pip install virtualenv <br>
+create loacl virtual environment: virtualenv env <br>
+go to the path <b>/env/bin</b>, activate env using: <b>source activate</b> <br>
+- % pip install PyQt5
+- % pip install opencv-python
+- % pip install pytesseract
+- % pip install torch
+- % pip install torchvision
+- % pip install matplotlib
 
 - Install the tesseract binary via brew and make sure the command of "tesseract --help" can run.
   See https://brew.sh/, https://guides.library.illinois.edu/c.php?g=347520&p=4121425 and https://tesseract-ocr.github.io/tessdoc/Installation.html
 - *Maybe* need to explicitly install the tesseract language package: % brew install tesseract-lang (installing tesseract-eng failed).
+---
 
 # Install on Windows (using terminal)
 install virtualenv using pip: pip install virtualenv <br>
@@ -26,6 +38,7 @@ go to the path <b>/env/Scripts</b>, activate env using: <b>activate</b> <br>
 - % pip install torchvision
 - % pip install matplotlib
 - Then you need to install tesseract from: https://tesseract-ocr.github.io/tessdoc/Installation.html ， https://github.com/UB-Mannheim/tesseract/wiki 
+---
 
 # Install on Linux (using terminal)
 install virtualenv: sudo apt install python3-virtualenv <br>
