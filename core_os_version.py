@@ -16,6 +16,7 @@ import faceClassify  # test face in one frame
 import torchTrain  # train by torch
 import preProcess  # OCR post processing
 import faceTestUsingTorch  # face recognition
+import evaluation  # draw graph
 import shutil
 from collections import defaultdict
 import numpy as np
@@ -50,10 +51,9 @@ class VideoClassifyThread(QThread):
 class VideoTestThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     log_queue = pyqtSignal(str)
-    def __init__(self, video_path, dataset_path, name_lst, net_path):
+    def __init__(self, video_path, name_lst, net_path):
         super().__init__()
         self.video = video_path
-        self.dataset = dataset_path
         self.name_lst = name_lst
         self.net_path = net_path
 
@@ -63,7 +63,7 @@ class VideoTestThread(QThread):
         num_frame = 1
         studyCollection = {}
         namedict = defaultdict(list)
-        time_slot = 20 * int(fps)  # time slot(frame=20seconds*fps) for checking whether student is checked,
+        time_slot = 20 * int(fps)  # time slot(frame=20seconds*fps) for checking whether student is checked
         for name in self.name_lst:
             studyCollection[name] = 0
 
@@ -92,7 +92,6 @@ class VideoTestThread(QThread):
                     line = 'The following people have not be recognized from ' + str((num_frame - time_slot)//int(fps)) + \
                            's to ' + str(num_frame//int(fps)) + 's:\n' + "".join(log_tmp)
                     self.log_queue.emit(line)
-                    # self.logQueue.put(line)
                     fs.write(line + '\n')
                 else:
                     line = 'all students can be recognized from ' + str((num_frame - time_slot)//int(fps)) + \
@@ -114,14 +113,11 @@ class VideoTestThread(QThread):
 
         for name in self.name_lst:
             if name not in namedict:
-                line = name + 'has not recognized in this video'
+                line = name + ' has not recognized in this video'
                 f.write(line)
                 f.write('\n')
 
         f.close()
-
-
-
 
 
 class App(QWidget):
@@ -131,7 +127,6 @@ class App(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Qt live label demo")
         loadUi('./faceRecognition.ui', self)
 
         self.setWindowIcon(QIcon('./icon.png'))
@@ -143,25 +138,20 @@ class App(QWidget):
         self.logOutputThread = threading.Thread(target=self.receiveLog, daemon=True)  # multithreading to handle log system and webcam
         self.logOutputThread.start()
 
-
-        # self.cap = cv2.VideoCapture()
-
-
         # face collection
         self.isFinishUpload = False
         self.uploadRosterButton.toggled.connect(self.uploadRoster)  # upload all students roster
         self.isFinishClassify = False
         self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video
         self.isFinishTrain = False
-        self.isFinishTest = False
         self.faceRecognitionButton.clicked.connect(self.faceRecognition)  # training classified images
-
-
+        self.isFinishTest = False
+        self.drawButton.clicked.connect(self.plot)  # draw graph
 
         self.logQueue.put('Step 1: upload roster\n'
                           'Step 2: upload zoom video\n'
                           'Step 3: training dataset\n'
-                          'Step 4: take attendance by face recognition')
+                          'Step 4: invigilating by face recognition')
 
         self.thread = None  # emit each frame as a signal
         self.video = None  # video path
@@ -170,13 +160,16 @@ class App(QWidget):
         self.name_lst = None  # roster list
 
 
-        # self.dataset = 'marked_image_10minCopy'
-        # self.net_path = 'net_params_10minCopy.pkl'
-        # self.name_lst = ('BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN',
-        #                  'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN',
-        #                  'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI',
-        #                  'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN',
-        #                  'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG')
+        # self.dataset = 'net_params_5min_of30min.pth'
+        # self.net_path = 'net_params_5min_of30min.pth'
+        # self.name_lst = ['BailinHE', 'BingyuanHUANG', 'DonghaoLI', 'DuoHAN', 'FanyuanZENG',
+        #                  'GuozhengCHEN', 'HanweiCHEN', 'HaoWANG', 'HaoweiLIU', 'JiahuangCHEN',
+        #                  'JiayiHOU', 'KaihangLIU', 'LeiLIU', 'LiZHANG', 'LiujiaDU', 'MengYIN',
+        #                  'MingshengMA', 'NgokTingYIP', 'QidongZHAI', 'RuikaiCAI', 'RunzeWANG',
+        #                  'ShengtongZHU', 'SuweiSUN', 'TszKuiCHOW', 'YalingZHANG', 'YirunCHEN',
+        #                  'YuMingCHAN', 'YuchuanWANG', 'ZhijingBAO', 'ZicongZHENG', 'ZiyaoZHANG', 'ZiyiLI']
+        # self.drawButton.setEnabled(True)
+
 
 
         # cascade classifier
@@ -216,7 +209,7 @@ class App(QWidget):
             self.logQueue.put('Warning: please upload training video')
             return
 
-        self.dataset = 'marked_image_' + self.video.split('/')[-1].split('_')[0]
+        self.dataset = 'marked_image_' + self.video.split('/')[-1].split('.')[0].split('_')[0]
 
         # remove historical folder
         if os.path.exists(self.dataset):
@@ -233,8 +226,6 @@ class App(QWidget):
         self.thread.start()
 
 
-
-
     def trainData(self):
         self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
         self.isFinishClassify = True
@@ -246,7 +237,6 @@ class App(QWidget):
             shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
             self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
             self.dataset = None
-            # self.num_frame = 1  # reset frame number
             return
 
 
@@ -267,8 +257,7 @@ class App(QWidget):
             self.logQueue.put('Warning: please upload testing video')
             return
 
-        self.thread = VideoTestThread(self.video, self.dataset, self.name_lst, self.net_path)
-
+        self.thread = VideoTestThread(self.video, self.name_lst, self.net_path)
         self.thread.log_queue.connect(self.send_message)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
@@ -280,6 +269,10 @@ class App(QWidget):
         # fps = self.cap.get(5)  # get the video fps
         # self.num_frame = 1
 
+    def plot(self):
+        feedback_name = 'feedback.txt'
+        log_name = 'systemLog.txt'
+        evaluation.drawGraph(feedback_name, log_name)
 
     def chooseRosterPath(self):
         fileName, filetype = QFileDialog.getOpenFileName(self, "choose roster", os.getcwd(), "Text Files (*.txt)")
