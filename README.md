@@ -28,8 +28,10 @@ go to the path <b>/env/bin</b>, activate env using: <b>source activate</b> <br>
 
 # Install on Windows (using terminal)
 install virtualenv using pip: pip install virtualenv <br>
-create loacl virtual environment: virtualenv env <br>
-go to the path <b>/env/Scripts</b>, activate env using: <b>activate</b> <br>
+create local virtual environment: $ virtualenv -p python3 iExamEnv <br>
+$ source iExamEnv/bin/activate <br>
+$ cd iExam <br>
+$ pip install -r requirements.txt
 - install relative python packages using pip: <br>
 - % pip install PyQt5
 - % pip install opencv-python
