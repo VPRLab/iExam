@@ -1,9 +1,9 @@
 # Yang Xu
 
-from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog
-from PyQt5.QtCore import pyqtSignal, QThread
+from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QDialog
+from PyQt5.QtCore import pyqtSignal, QThread, QRegExp
 from PyQt5.uic import loadUi
-from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor, QFont, QColor
+from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor, QFont, QColor, QRegExpValidator
 
 
 import sys
@@ -25,21 +25,24 @@ import numpy as np
 class VideoClassifyThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
 
-    def __init__(self, video_path, dataset_path, name_lst):
+    def __init__(self, video_path, dataset_path, name_lst, viewInfo):
         super().__init__()
         self.video = video_path
         self.dataset = dataset_path
         self.name_lst = name_lst
+        self.viewInfo = viewInfo
 
     def run(self):
 
         cap = cv2.VideoCapture(self.video)
+        self.viewInfo['Width'] = int(cap.get(3))
+        self.viewInfo['Height'] = int(cap.get(4))
         num_frame = 1
         while True:
             ret, cv_img = cap.read()
             if ret:
                 print('the number of captured frame: ', num_frame)
-                image = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame)
+                image = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
                 self.change_pixmap_signal.emit(image)
             else:
                 cap.release()
@@ -141,6 +144,8 @@ class App(QWidget):
         # face collection
         self.isFinishUpload = False
         self.uploadRosterButton.toggled.connect(self.uploadRoster)  # upload all students roster
+        self.isFinishFormat = False
+        self.clipFormatButton.toggled.connect(self.addInputFormat)  # input view format
         self.isFinishClassify = False
         self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video
         self.isFinishTrain = False
@@ -158,6 +163,8 @@ class App(QWidget):
         self.dataset = None  # dataset name
         self.net_path = None  # model name
         self.name_lst = None  # roster list
+        self.formatDialog = formatDialog()
+        self.viewInfo = {'Row': '', 'Column': '', 'Width': '', 'Height': ''}
 
 
         # self.dataset = 'net_params_5min_of30min.pth'
@@ -192,9 +199,33 @@ class App(QWidget):
             self.uploadRosterButton.setEnabled(False)
             self.logQueue.put('Success: uploadRoster')
             self.isFinishUpload = True
-            self.uploadVideoButton.setEnabled(True)
+            self.clipFormatButton.setEnabled(True)
         else:
             self.logQueue.put('Warning: not upload roster')
+
+    def addInputFormat(self):
+        row_num, column_num= self.viewInfo.get('Row'), self.viewInfo.get('Column')
+        self.formatDialog.rowLineEdit.setText(row_num)
+        self.formatDialog.columnLineEdit.setText(column_num)
+        self.formatDialog.okButton.clicked.connect(self.checkViewInfo)
+        self.formatDialog.exec()
+
+    # revise user info
+    def checkViewInfo(self):
+        if not (self.formatDialog.rowLineEdit.hasAcceptableInput() and
+                self.formatDialog.columnLineEdit.hasAcceptableInput()):
+            self.formatDialog.msgLabel.setText(
+                '<font color=red>Submission Error: check and rewrite！</font>')
+        else:
+            # get user input
+            self.viewInfo['Row'] = int(self.formatDialog.rowLineEdit.text().strip())
+            self.viewInfo['Column'] = int(self.formatDialog.columnLineEdit.text().strip())
+            self.logQueue.put('Success：Add view format')
+            self.isFinishFormat = True
+            print('view format: ', self.viewInfo)
+            self.formatDialog.close()
+            self.clipFormatButton.setEnabled(False)
+            self.uploadVideoButton.setEnabled(True)
 
     def uploadVideo(self):
         # capture from web cam
@@ -219,7 +250,7 @@ class App(QWidget):
             os.makedirs(self.dataset)
 
 
-        self.thread = VideoClassifyThread(self.video, self.dataset, self.name_lst)
+        self.thread = VideoClassifyThread(self.video, self.dataset, self.name_lst, self.viewInfo)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.finished.connect(self.trainData)
@@ -336,6 +367,18 @@ class App(QWidget):
             self.logTextEdit.insertPlainText(time + '\n' + log_received + '\n')  # insert the text
         self.logTextEdit.ensureCursorVisible()  # by scrolling text make cursor visible
 
+class formatDialog(QDialog):
+    def __init__(self):
+        super(formatDialog, self).__init__()
+        loadUi('./format.ui', self)
+        self.setFixedSize(512, 248)
+
+        # restrict the input
+        regx = QRegExp('^[0-9]$')
+        row_validator = QRegExpValidator(regx, self.rowLineEdit)
+        self.rowLineEdit.setValidator(row_validator)
+        column_validator = QRegExpValidator(regx, self.columnLineEdit)
+        self.columnLineEdit.setValidator(column_validator)
 
 if __name__=="__main__":
     app = QApplication(sys.argv)
