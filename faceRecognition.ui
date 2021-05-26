@@ -97,9 +97,9 @@
        <property name="geometry">
         <rect>
          <x>0</x>
-         <y>230</y>
+         <y>290</y>
          <width>281</width>
-         <height>371</height>
+         <height>311</height>
         </rect>
        </property>
        <property name="title">
@@ -114,7 +114,7 @@
           <x>0</x>
           <y>30</y>
           <width>281</width>
-          <height>341</height>
+          <height>271</height>
          </rect>
         </property>
         <property name="font">
@@ -136,7 +136,7 @@
          <x>10</x>
          <y>30</y>
          <width>271</width>
-         <height>191</height>
+         <height>243</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout">
@@ -156,6 +156,28 @@
           </property>
           <property name="text">
            <string>select roster path</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="clipFormatButton">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="font">
+           <font>
+            <family>Yu Gothic UI Semibold</family>
+            <pointsize>12</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+            <kerning>true</kerning>
+           </font>
+          </property>
+          <property name="text">
+           <string>input view format</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
@@ -201,6 +223,28 @@ and training dataset</string>
           </property>
           <property name="text">
            <string>select test video and run</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="drawButton">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="font">
+           <font>
+            <family>Yu Gothic UI Semibold</family>
+            <pointsize>12</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+            <kerning>true</kerning>
+           </font>
+          </property>
+          <property name="text">
+           <string>draw analysis graph</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
