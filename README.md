@@ -9,7 +9,12 @@ activate local environment <br>
 cd iExam <br>
 install all packages: pip install -r requirements.txt <br>
 After installing the necessary packages, you can run iExam via: python3 core_os_version.py <br>
-Details for different platforms shown below
+Details for different platforms shown below <br>
+
+# Requirments:
+- % student roster (first name + surname), file fomrat is txt <br>
+- % 5-min training video <br>
+- % online exam testing video <br>
 
 # Install on Mac
 install virtualenv: pip install virtualenv <br>
