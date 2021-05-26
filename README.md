@@ -13,7 +13,7 @@ Details for different platforms shown below <br>
 
 # Requirments:
 - % student roster (first name + surname), file format is txt <br>
-- % 5-min training video <br>
+- % 5-min training video (manually clip a video segment before exam) <br>
 - % online exam testing video <br>
 
 # Install on Mac
