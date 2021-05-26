@@ -12,7 +12,7 @@ After installing the necessary packages, you can run iExam via: python3 core_os_
 Details for different platforms shown below <br>
 
 # Requirments:
-- % student roster (first name + surname), file fomrat is txt <br>
+- % student roster (first name + surname), file format is txt <br>
 - % 5-min training video <br>
 - % online exam testing video <br>
 
