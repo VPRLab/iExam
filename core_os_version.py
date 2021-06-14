@@ -20,6 +20,8 @@ import evaluation  # draw graph
 import shutil
 from collections import defaultdict
 import numpy as np
+import faceClassify_test
+
 
 
 class VideoClassifyThread(QThread):
@@ -38,38 +40,50 @@ class VideoClassifyThread(QThread):
         self.viewInfo['Width'] = int(cap.get(3))
         self.viewInfo['Height'] = int(cap.get(4))
         num_frame = 1
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
         while True:
             ret, cv_img = cap.read()
+            # if ret and num_frame % 3 == 0:
             if ret:
                 print('the number of captured frame: ', num_frame)
-                image = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
+                # image = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
+                image = faceClassify_test.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
                 self.change_pixmap_signal.emit(image)
-            else:
+            if not ret:
                 cap.release()
                 break
             num_frame += 1
-            cv2.waitKey(1)
+            # cv2.waitKey(1)
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
 
 
 class VideoTestThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     log_queue = pyqtSignal(str)
-    def __init__(self, video_path, name_lst, net_path):
+    def __init__(self, video_path, name_lst, net_path, viewInfo):
         super().__init__()
         self.video = video_path
         self.name_lst = name_lst
         self.net_path = net_path
 
+        self.viewInfo = viewInfo
+
     def run(self):
         cap = cv2.VideoCapture(self.video)
+        self.viewInfo['Width'] = int(cap.get(3))
+        self.viewInfo['Height'] = int(cap.get(4))
         fps = cap.get(5)
         num_frame = 1
         studyCollection = {}
         namedict = defaultdict(list)
         time_slot = 20 * int(fps)  # time slot(frame=20seconds*fps) for checking whether student is checked
+        tmp_dict = {}  # store the already recognized name in somewhere
         for name in self.name_lst:
             studyCollection[name] = 0
-
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
         while cap.isOpened():
             ret, cv_img = cap.read()  # read one frame
             if not ret:
@@ -77,8 +91,14 @@ class VideoTestThread(QThread):
                 break
 
             print('the number of captured frame: ' + str(num_frame))
+
+            # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
+            #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo)
+            # image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
+            #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo, tmp_dict)
             image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
                                                                             self.net_path, studyCollection, time_slot)
+
             self.change_pixmap_signal.emit(image)
 
             if num_frame % time_slot == 0:  # every one time slot check
@@ -105,7 +125,8 @@ class VideoTestThread(QThread):
 
             num_frame += 1
             cv2.waitKey(1)
-
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
         self.log_queue.emit('Success: faceRecognition')
 
         f = open('feedback.txt', 'a')
@@ -147,9 +168,9 @@ class App(QWidget):
         self.isFinishFormat = False
         self.clipFormatButton.toggled.connect(self.addInputFormat)  # input view format
         self.isFinishClassify = False
-        self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video
+        self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video and then training
         self.isFinishTrain = False
-        self.faceRecognitionButton.clicked.connect(self.faceRecognition)  # training classified images
+        self.faceRecognitionButton.clicked.connect(self.faceRecognition)  # select test video
         self.isFinishTest = False
         self.drawButton.clicked.connect(self.plot)  # draw graph
 
@@ -164,18 +185,13 @@ class App(QWidget):
         self.net_path = None  # model name
         self.name_lst = None  # roster list
         self.formatDialog = formatDialog()
-        self.viewInfo = {'Row': '', 'Column': '', 'Width': '', 'Height': ''}
+        self.viewInfo = {'Row': 5, 'Column': 5, 'Width': '', 'Height': ''}
 
 
-        # self.dataset = 'net_params_5min_of30min.pth'
-        # self.net_path = 'net_params_5min_of30min.pth'
-        # self.name_lst = ['BailinHE', 'BingyuanHUANG', 'DonghaoLI', 'DuoHAN', 'FanyuanZENG',
-        #                  'GuozhengCHEN', 'HanweiCHEN', 'HaoWANG', 'HaoweiLIU', 'JiahuangCHEN',
-        #                  'JiayiHOU', 'KaihangLIU', 'LeiLIU', 'LiZHANG', 'LiujiaDU', 'MengYIN',
-        #                  'MingshengMA', 'NgokTingYIP', 'QidongZHAI', 'RuikaiCAI', 'RunzeWANG',
-        #                  'ShengtongZHU', 'SuweiSUN', 'TszKuiCHOW', 'YalingZHANG', 'YirunCHEN',
-        #                  'YuMingCHAN', 'YuchuanWANG', 'ZhijingBAO', 'ZicongZHENG', 'ZiyaoZHANG', 'ZiyiLI']
-        # self.drawButton.setEnabled(True)
+        # self.dataset = 'marked_image_10minCopy'
+        self.net_path = 'net_params_5min_of10min.pth'
+        self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
+        self.faceRecognitionButton.setEnabled(True)
 
 
 
@@ -205,8 +221,8 @@ class App(QWidget):
 
     def addInputFormat(self):
         row_num, column_num= self.viewInfo.get('Row'), self.viewInfo.get('Column')
-        self.formatDialog.rowLineEdit.setText(row_num)
-        self.formatDialog.columnLineEdit.setText(column_num)
+        self.formatDialog.rowLineEdit.setText(str(row_num))
+        self.formatDialog.columnLineEdit.setText(str(column_num))
         self.formatDialog.okButton.clicked.connect(self.checkViewInfo)
         self.formatDialog.exec()
 
@@ -288,7 +304,7 @@ class App(QWidget):
             self.logQueue.put('Warning: please upload testing video')
             return
 
-        self.thread = VideoTestThread(self.video, self.name_lst, self.net_path)
+        self.thread = VideoTestThread(self.video, self.name_lst, self.net_path, self.viewInfo)
         self.thread.log_queue.connect(self.send_message)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
