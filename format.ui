@@ -43,7 +43,7 @@
     </font>
    </property>
    <property name="title">
-    <string>Input window format</string>
+    <string>Input video format</string>
    </property>
    <property name="alignment">
     <set>Qt::AlignCenter</set>
@@ -75,6 +75,9 @@
           <height>31</height>
          </rect>
         </property>
+        <property name="text">
+         <string>5</string>
+        </property>
        </widget>
       </widget>
      </item>
@@ -94,6 +97,9 @@
           <width>161</width>
           <height>31</height>
          </rect>
+        </property>
+        <property name="text">
+         <string>5</string>
         </property>
        </widget>
       </widget>
