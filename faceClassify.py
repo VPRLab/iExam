@@ -5,13 +5,17 @@ import difflib
 import platform
 
 
-def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo):
+def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict, fps):
 
     classfier = cv2.CascadeClassifier("./haarcascades/haarcascade_frontalface_default.xml")
     if platform.system() == 'Windows':
         pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
     elif platform.system() == 'Darwin':
         pytesseract.pytesseract.tesseract_cmd = '/usr/local/bin/tesseract'
+
+    if num_frame % fps == 0:  # every second reset tmp_dict
+        tmp_dict.clear()
+        print('clear tmp dict')
 
     grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # change to greystyle
     row = viewInfo.get('Row')
@@ -23,36 +27,42 @@ def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo):
         for faceRect in faceRects:
             x, y, w, h = faceRect
 
-            for i in range(column):
-                for j in range(row):
-                    if clip_width*j <= x <= clip_width*(j + 1) and clip_height * i <= y <= clip_height * (i + 1):
-                        cropped = grey[clip_height * (i + 1) - 32:clip_height * (i + 1), clip_width * j:clip_width * j + 120]  # decrease length
-                        cropped = cv2.resize(cropped, None, fx=1.2, fy=1.2)
-                        # if pixel greyscale>185, set this pixel=255, preprocess the character image to get good quality for OCR
-                        ret, thresh1 = cv2.threshold(cropped, 185, 255, cv2.THRESH_TOZERO)
-                        text = pytesseract.image_to_string(thresh1)   # OCR
-                        text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
-                        # print('before text is:', text)
-                        text = string_comparison(text, name_lst)
+            face_row = int(x / clip_width)
+            face_col = int(y / clip_height)
+            if (str(face_row), str(face_col)) in tmp_dict.keys():
+                historical_name = tmp_dict[str(face_row), str(face_col)]
+                clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
+                if clip_img.size != 0:
+                    cv2.imwrite(dataset + '/' + historical_name + '/{0}.jpg'.format(num_frame), clip_img)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
-                        try:
-                            if text not in os.listdir(dataset) and text != '':
-                                os.makedirs("./" + dataset + "/" + text)
-                                # print('creat folder of ' + text)
-                            elif text == '':
-                                continue
-                        except Exception as e:
-                            print("frame number:", num_frame, e)
-                            pass
+            else:
+                cropped = grey[clip_height * (face_col + 1) - 32:clip_height * (face_col + 1), clip_width * face_row:clip_width * face_row + 120]  # decrease length
+                cropped = cv2.resize(cropped, None, fx=1.2, fy=1.2)
+                # if pixel greyscale>185, set this pixel=255, preprocess the character image to get good quality for OCR
+                ret, thresh1 = cv2.threshold(cropped, 185, 255, cv2.THRESH_TOZERO)
+                text = pytesseract.image_to_string(thresh1)  # OCR
+                text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
+                if text == '':
+                    continue
+                # print('before text is:', text)
+                text = string_comparison(text, name_lst)
+                tmp_dict[(str(face_row), str(face_col))] = text  # add ocr result in dict and every one second refresh
+                try:
+                    if text not in os.listdir(dataset) and text.isalpha():
+                        os.makedirs("./" + dataset + "/" + text)
+                        # print('creat folder of ' + text)
+                except Exception as e:
+                    print("frame number:", num_frame, e)
+                    pass
 
-                        # print('after text is:', text)
-                        clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
-                        if clip_img.size != 0 and text.isalpha():
-                            cv2.imwrite(dataset + '/' + text + '/{0}.jpg'.format(num_frame), clip_img)
+                # print('after text is:', text)
+                clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
+                if clip_img.size != 0:
+                    cv2.imwrite(dataset + '/' + text + '/{0}.jpg'.format(num_frame), clip_img)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-
-    return frame
+    return frame, tmp_dict
 
 
 
@@ -66,3 +76,4 @@ def string_comparison(text, name_lst):  # get rid of small difference of OCR for
 
 
 
+# 140min for classify 5min video if one frame ocr successful then the other 24 frame use same text in one second
