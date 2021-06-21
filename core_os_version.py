@@ -40,6 +40,8 @@ class VideoClassifyThread(QThread):
         self.viewInfo['Width'] = int(cap.get(3))
         self.viewInfo['Height'] = int(cap.get(4))
         num_frame = 1
+        fps = int(cap.get(5))
+        tmp_dict = {}  # OCR already recognized name in one second
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
         while True:
@@ -47,8 +49,8 @@ class VideoClassifyThread(QThread):
             # if ret and num_frame % 3 == 0:
             if ret:
                 print('the number of captured frame: ', num_frame)
-                # image = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
-                image = faceClassify_test.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
+                image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo, tmp_dict, fps)
+                # image  = faceClassify_test.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
                 self.change_pixmap_signal.emit(image)
             if not ret:
                 cap.release()
@@ -94,10 +96,10 @@ class VideoTestThread(QThread):
 
             # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
             #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo)
-            # image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-            #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo, tmp_dict)
-            image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-                                                                            self.net_path, studyCollection, time_slot)
+            image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
+                                                                            self.net_path, studyCollection, time_slot, self.viewInfo, tmp_dict)
+            # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
+            #                                                                 self.net_path, studyCollection, time_slot)
 
             self.change_pixmap_signal.emit(image)
 
@@ -189,9 +191,9 @@ class App(QWidget):
 
 
         # self.dataset = 'marked_image_10minCopy'
-        self.net_path = 'net_params_5min_of10min.pth'
-        self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
-        self.faceRecognitionButton.setEnabled(True)
+        # self.net_path = 'net_params_5min.pth'
+        # self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'QingboLI', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
+        # self.faceRecognitionButton.setEnabled(True)
 
 
 
@@ -286,11 +288,14 @@ class App(QWidget):
             self.dataset = None
             return
 
-
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
         self.net_path, self.name_lst = torchTrain.trainandsave(self.dataset)
         self.logQueue.put('Success: trainData')
         self.isFinishTrain = True
         self.faceRecognitionButton.setEnabled(True)
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
 
 
     def faceRecognition(self):
@@ -308,6 +313,7 @@ class App(QWidget):
         self.thread.log_queue.connect(self.send_message)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
+        self.thread.finished.connect(self.enableDrawButton)
         self.thread.start()
 
         # self.cap = cv2.VideoCapture(self.video)
@@ -315,7 +321,8 @@ class App(QWidget):
         # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         # fps = self.cap.get(5)  # get the video fps
         # self.num_frame = 1
-
+    def enableDrawButton(self):
+        self.drawButton.setEnabled(True)
     def plot(self):
         feedback_name = 'feedback.txt'
         log_name = 'systemLog.txt'
