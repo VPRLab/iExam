@@ -81,6 +81,28 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="trueEvaluateButton">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="font">
+        <font>
+         <family>Yu Gothic UI Semibold</family>
+         <pointsize>12</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+         <kerning>true</kerning>
+        </font>
+       </property>
+       <property name="text">
+        <string>test accuracy via comparison</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="drawButton">
        <property name="enabled">
         <bool>true</bool>
