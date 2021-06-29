@@ -45,7 +45,7 @@ import pandas as pd
 
 # use every captured face to predict in one cell, if one frame detect and predict successfully, then the left 24 frames (1s has 25 frames) not detect and predict
 # use time 14min for 5min test video in windows, 12min in mac
-def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection, time_slot, viewInfo, tmp_dict):
+def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection, viewInfo, tmp_dict):
     classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
 
     grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -53,53 +53,59 @@ def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection,
     column = viewInfo.get('Column')
     clip_width = int(viewInfo.get('Width') / row)  # 256
     clip_height = int(viewInfo.get('Height') / column)  # 144
-    if frameCounter % int(time_slot / 20) == 0:  # every second reset tmp_dict
+    fps = viewInfo.get('fps')
+    recognize_period = viewInfo.get('recognize_period')
+    study_period = viewInfo.get('study_period')
+    if frameCounter % int(fps * recognize_period) == 0:  # every recognize period reset tmp_dict
         tmp_dict.clear()
         print('clear tmp dict')
-    if frameCounter % time_slot == 1:  # every one time slot reset
+    if frameCounter % int(fps * study_period) == 1:  # every study period reset
         for k in studyCollection.keys():
             studyCollection[k] = 0
     label = -1
-
-    for j in range(row):
-        for i in range(column):
-            if (str(j), str(i)) in tmp_dict.keys():
-                label = tmp_dict[str(j), str(i)]
-                cv2.putText(frame, classes[label], (clip_width * j +30, clip_height * i+30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
-            else:
-                cropped = grey[clip_height * i:clip_height * (i + 1), clip_width * j:clip_width * (j +1)]  # single cell
-                # cv2.imshow("cropped", cropped)
-                face_rects = classfier.detectMultiScale(cropped, scaleFactor=1.2, minNeighbors=3, minSize=(32, 32))
-                # print('num of detected face: ', len(face_rects))
-                # print([j, i])
-                # cv2.waitKey(200)
-                if len(face_rects) > 0:
-                    for face_rect in face_rects:
-                        x, y, w, h = face_rect
-                        image = cropped[y - 10:y + h + 10, x - 10:x + w + 10]
-                        # opencv to PIL: BGR2RGB
-                        PIL_image = cv2pil(image)
-                        if PIL_image is None:
-                            continue
-                        # using model to recognize
-                        label = predict_model(PIL_image, net_path, len(classes))
-                        # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
-                        cv2.putText(frame, classes[label], (clip_width * j +30, clip_height * i +30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
-                        tmp_dict[(str(j), str(i))] = label
-
-            if label != -1:
-                if namedict[classes[label]]==[]:
-                    namedict[classes[label]].append(frameCounter)
-                    namedict[classes[label]].append(1)
+    try:
+        for j in range(row):
+            for i in range(column):
+                if (str(j), str(i)) in tmp_dict.keys():
+                    label = tmp_dict[str(j), str(i)]
+                    cv2.putText(frame, classes[label], (clip_width * j +30, clip_height * i+30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
                 else:
-                    namedict[classes[label]][1] += 1
-                # get the time of this student appear in a time slot
-                studyCollection[classes[label]] += 1
+                    cropped = grey[clip_height * i:clip_height * (i + 1), clip_width * j:clip_width * (j +1)]  # single cell
+                    # cv2.imshow("cropped", cropped)
+                    face_rects = classfier.detectMultiScale(cropped, scaleFactor=1.2, minNeighbors=3, minSize=(32, 32))
+                    # print('num of detected face: ', len(face_rects))
+                    # print([j, i])
+                    # cv2.waitKey(200)
+                    if len(face_rects) > 0:
+                        for face_rect in face_rects:
+                            x, y, w, h = face_rect
+                            image = cropped[y - 10:y + h + 10, x - 10:x + w + 10]
+                            # opencv to PIL: BGR2RGB
+                            PIL_image = cv2pil(image)
+                            if PIL_image is None:
+                                continue
+                            # using model to recognize
+                            label = predict_model(PIL_image, net_path, len(classes))
+                            # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
+                            cv2.putText(frame, classes[label], (clip_width * j +30, clip_height * i +30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
+                            tmp_dict[(str(j), str(i))] = label
+
+                if label != -1:
+                    if namedict[classes[label]]==[]:
+                        namedict[classes[label]].append(frameCounter)
+                        namedict[classes[label]].append(1)
+                    else:
+                        namedict[classes[label]][1] += 1
+                    # get the time of this student appear in a time slot
+                    studyCollection[classes[label]] += 1
+    except Exception as e:
+        print("frame number:", frameCounter, e)
+        pass
 
     return frame, namedict, studyCollection, tmp_dict
 
-# use every captured face to predict in one frame not one cell, if one frame detect and predict successfully, then the left 24 frames (1s has 25 frames) ect and predict
+# use every captured face to predict in one frame not one cell, if one frame detect and predict successfully, then the left 24 frames (1s has 25 frames) not detect and predict
 # use time 27min for 5min test video
 # def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection, time_slot, viewInfo, tmp_dict):
 #     classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
