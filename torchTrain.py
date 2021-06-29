@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
+import time
 
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -23,7 +24,7 @@ def loadtraindata(path):
     print(trainset)
     # batch_size: number of iteration in each time
     # shuffle: whether random sort in each time
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=True, num_workers=2)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=20, shuffle=True, num_workers=8, pin_memory=True)
     return trainloader, filename, tuple(trainset.classes)
 
 
@@ -54,8 +55,9 @@ def trainandsave(path):
     trainloader, filename, classes = loadtraindata(path)
 
     net = Net(len(classes))
+    print(net)
     net.to(DEVICE)
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)  # learning rate=0.001
+    optimizer = optim.SGD(net.parameters(), lr=0.008, momentum=0.9)  # learning rate=0.002
     criterion = nn.CrossEntropyLoss()  # loss function
     # training part
     for epoch in range(5):  # 5 epoch
@@ -63,8 +65,7 @@ def trainandsave(path):
         net.train(True)
         running_loss = 0.0  # loss output, training 200 images will output running_loss
         for i, (inputs, labels) in enumerate(trainloader):
-            # wrap them in Variable, Variable will recode all operation for tensors
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)  # change format to Variable
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
             optimizer.zero_grad()  # reset gradient to 0, because feed back will add last gradient
             # forward + backward + optimize
             outputs = net(inputs)  # put input to cnn net
@@ -86,5 +87,9 @@ def trainandsave(path):
 
 
 if __name__=="__main__":
-    path = 'marked_image_8min'
+    path = 'marked_image_5min'
+    before = time.asctime(time.localtime(time.time()))
+    print(before)
     trainandsave(path)
+    after = time.asctime(time.localtime(time.time()))
+    print(after)
