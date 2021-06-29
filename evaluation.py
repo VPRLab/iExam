@@ -75,7 +75,7 @@ def drawGraph(feedback_name, log_name):
             tmp1 = line.split('from ')[1]
             tmp2 = tmp1.split(' to ')
             tmp2[0] = tmp2[0][:-1]
-            tmp2[1] = tmp2[1][:-2]
+            tmp2[1] = tmp2[1][:-1]
             all_log_time[idx] = tmp2
             all_log_name[idx] = []
         else:
