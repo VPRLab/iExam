@@ -5,7 +5,7 @@ import difflib
 import platform
 
 
-def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict, fps):
+def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict):
 
     classfier = cv2.CascadeClassifier("./haarcascades/haarcascade_frontalface_default.xml")
     if platform.system() == 'Windows':
@@ -13,7 +13,9 @@ def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict
     elif platform.system() == 'Darwin':
         pytesseract.pytesseract.tesseract_cmd = '/usr/local/bin/tesseract'
 
-    if num_frame % fps == 0:  # every second reset tmp_dict
+    fps = viewInfo.get('fps')
+    ocr_period = viewInfo.get('ocr_period')
+    if num_frame % (fps * ocr_period) == 0:  # every period reset tmp_dict
         tmp_dict.clear()
         print('clear tmp dict')
 
