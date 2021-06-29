@@ -20,12 +20,13 @@ import evaluation  # draw graph
 import shutil
 from collections import defaultdict
 import numpy as np
-import faceClassify_test
-
+import configparser
+# import faceClassify_test
 
 
 class VideoClassifyThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
+    classify_finish_signal = pyqtSignal(int)
 
     def __init__(self, video_path, dataset_path, name_lst, viewInfo):
         super().__init__()
@@ -35,12 +36,11 @@ class VideoClassifyThread(QThread):
         self.viewInfo = viewInfo
 
     def run(self):
-
         cap = cv2.VideoCapture(self.video)
         self.viewInfo['Width'] = int(cap.get(3))
         self.viewInfo['Height'] = int(cap.get(4))
         num_frame = 1
-        fps = int(cap.get(5))
+        self.viewInfo['fps'] = int(cap.get(5))
         tmp_dict = {}  # OCR already recognized name in one second
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
@@ -49,7 +49,7 @@ class VideoClassifyThread(QThread):
             # if ret and num_frame % 3 == 0:
             if ret:
                 print('the number of captured frame: ', num_frame)
-                image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo, tmp_dict, fps)
+                image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo, tmp_dict)
                 # image  = faceClassify_test.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
                 self.change_pixmap_signal.emit(image)
             if not ret:
@@ -60,6 +60,32 @@ class VideoClassifyThread(QThread):
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
 
+        # preprocess part
+        preProcess.OCRprocessing(self.dataset, self.name_lst)
+        if len(os.listdir(self.dataset)) < 10:
+            self.classify_finish_signal.emit(-1)
+            return
+        elif len(os.listdir(self.dataset)) >= 10:
+            self.classify_finish_signal.emit(1)
+            return
+
+
+class VideoTrainThread(QThread):
+    # training part signal
+    train_successful_signal = pyqtSignal(dict)
+    def __init__(self, dataset_path):
+        super().__init__()
+        self.dataset = dataset_path
+
+    def run(self):
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
+        net_path, name_lst = torchTrain.trainandsave(self.dataset)
+        print(net_path)
+        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        print(time)
+        info_dict = {'net_path': net_path, 'name_lst': name_lst}
+        self.train_successful_signal.emit(info_dict)
 
 class VideoTestThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
@@ -69,18 +95,20 @@ class VideoTestThread(QThread):
         self.video = video_path
         self.name_lst = name_lst
         self.net_path = net_path
-
         self.viewInfo = viewInfo
 
     def run(self):
         cap = cv2.VideoCapture(self.video)
         self.viewInfo['Width'] = int(cap.get(3))
         self.viewInfo['Height'] = int(cap.get(4))
-        fps = cap.get(5)
+        fps = int(cap.get(5))
+        self.viewInfo['fps'] = fps
+        time_slot = int(fps * self.viewInfo.get('study_period'))
+
         num_frame = 1
         studyCollection = {}
         namedict = defaultdict(list)
-        time_slot = 20 * int(fps)  # time slot(frame=20seconds*fps) for checking whether student is checked
+        # time_slot = 20 * int(fps)  # time slot(frame=20seconds*fps) for checking whether student is checked
         tmp_dict = {}  # store the already recognized name in somewhere
         for name in self.name_lst:
             studyCollection[name] = 0
@@ -97,7 +125,7 @@ class VideoTestThread(QThread):
             # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
             #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo)
             image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-                                                                            self.net_path, studyCollection, time_slot, self.viewInfo, tmp_dict)
+                                                                            self.net_path, studyCollection, self.viewInfo, tmp_dict)
             # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
             #                                                                 self.net_path, studyCollection, time_slot)
 
@@ -187,12 +215,21 @@ class App(QWidget):
         self.net_path = None  # model name
         self.name_lst = None  # roster list
         self.formatDialog = formatDialog()
-        self.viewInfo = {'Row': 5, 'Column': 5, 'Width': '', 'Height': ''}
+        self.viewInfo = {'Row': '', 'Column': '', 'Width': '', 'Height': '', 'ocr_period': '', 'recognize_period': '', 'study_period': '', 'fps': ''}
+
+        # read config file
+        self.config = configparser.ConfigParser()
+        self.config.read('config.ini', encoding='utf-8-sig')
+        self.viewInfo['Row'] = self.config.getint('viewInfo', 'Row')
+        self.viewInfo['Column'] = self.config.getint('viewInfo', 'Column')
+        self.viewInfo['ocr_period'] = self.config.getint('period', 'ocr_period')
+        self.viewInfo['recognize_period'] = self.config.getint('period', 'recognize_period')
+        self.viewInfo['study_period'] = self.config.getint('period', 'study_period')
 
 
         # self.dataset = 'marked_image_10minCopy'
         # self.net_path = 'net_params_5min.pth'
-        # self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'QingboLI', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
+        # self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
         # self.faceRecognitionButton.setEnabled(True)
 
 
@@ -271,31 +308,37 @@ class App(QWidget):
         self.thread = VideoClassifyThread(self.video, self.dataset, self.name_lst, self.viewInfo)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
-        self.thread.finished.connect(self.trainData)
+        self.thread.classify_finish_signal.connect(self.successful_classify)
+        # self.thread.finished.connect(self.trainData)
         self.thread.start()
 
 
     def trainData(self):
-        self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
-        self.isFinishClassify = True
-        preProcess.OCRprocessing(self.dataset, self.name_lst)
+        self.thread = VideoTrainThread(self.dataset)
+        self.thread.train_successful_signal.connect(self.successful_train)
+        self.thread.start()
 
-
-        if len(os.listdir(self.dataset)) < 10:
-            self.uploadVideoButton.setEnabled(True)
-            shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
-            self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
-            self.dataset = None
-            return
-
-        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-        print(time)
-        self.net_path, self.name_lst = torchTrain.trainandsave(self.dataset)
-        self.logQueue.put('Success: trainData')
-        self.isFinishTrain = True
-        self.faceRecognitionButton.setEnabled(True)
-        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-        print(time)
+        # self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
+        # self.isFinishClassify = True
+        # preProcess.OCRprocessing(self.dataset, self.name_lst)
+        #
+        #
+        # if len(os.listdir(self.dataset)) < 10:
+        #     self.uploadVideoButton.setEnabled(True)
+        #     shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
+        #     self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
+        #     self.dataset = None
+        #     return
+        #
+        # time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        # print(time)
+        # self.net_path, self.name_lst = torchTrain.trainandsave(self.dataset)
+        # print(self.net_path)
+        # self.logQueue.put('Success: trainData')
+        # self.isFinishTrain = True
+        # self.faceRecognitionButton.setEnabled(True)
+        # time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+        # print(time)
 
 
     def faceRecognition(self):
@@ -389,6 +432,25 @@ class App(QWidget):
         else:
             self.logTextEdit.insertPlainText(time + '\n' + log_received + '\n')  # insert the text
         self.logTextEdit.ensureCursorVisible()  # by scrolling text make cursor visible
+
+    def successful_classify(self, switch):
+        if switch == -1:
+            self.uploadVideoButton.setEnabled(True)
+            shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
+            self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
+            self.dataset = None
+        elif switch == 1:
+            self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
+            self.trainData()
+
+    def successful_train(self, info_dict):
+        if info_dict != {}:
+            self.logQueue.put('Success: trainData')
+            self.net_path = info_dict['net_path']
+            self.name_lst = info_dict['name_lst']
+            self.isFinishTrain = True
+            self.faceRecognitionButton.setEnabled(True)
+            
 
 class formatDialog(QDialog):
     def __init__(self):
