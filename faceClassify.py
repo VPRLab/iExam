@@ -31,6 +31,12 @@ def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict
 
             face_row = int(x / clip_width)
             face_col = int(y / clip_height)
+            if w>clip_width or h>clip_height:  # avoid capture error
+                continue
+            tmp_row = int((x+w) / clip_width)
+            tmp_col = int((y+h) / clip_height)
+            if tmp_row!=face_row or tmp_col!=face_col:  # avoid capture error
+                continue
             if (str(face_row), str(face_col)) in tmp_dict.keys():
                 historical_name = tmp_dict[str(face_row), str(face_col)]
                 clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
