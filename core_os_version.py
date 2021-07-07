@@ -21,6 +21,7 @@ import shutil
 from collections import defaultdict
 import numpy as np
 import configparser
+from multiprocessing import Process
 # import faceClassify_test
 
 
@@ -194,7 +195,7 @@ class App(QWidget):
 
         # face collection
         self.isFinishUpload = False
-        self.uploadRosterButton.toggled.connect(self.uploadRoster)  # upload all students roster
+        # self.uploadRosterButton.toggled.connect(self.uploadRoster)  # upload all students roster
         self.isFinishFormat = False
         self.clipFormatButton.toggled.connect(self.addInputFormat)  # input view format
         self.isFinishClassify = False
@@ -227,10 +228,12 @@ class App(QWidget):
         self.viewInfo['study_period'] = self.config.getint('period', 'study_period')
 
 
-        # self.dataset = 'marked_image_10minCopy'
+        self.dataset = 'marked_image_5min'
         # self.net_path = 'net_params_5min.pth'
         # self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
         # self.faceRecognitionButton.setEnabled(True)
+        self.uploadRosterButton.toggled.connect(self.trainData)
+
 
 
 
@@ -314,10 +317,29 @@ class App(QWidget):
 
 
     def trainData(self):
+        # method1:
+        # try:
+        #     return_dict = multiprocessing.Manager().dict()
+        #     p = Process(target=trainProcess, args=(self.dataset, return_dict))
+        #     p.start()
+        #     p.join()
+        #     self.net_path = return_dict.get('net_path')
+        #     self.name_lst = return_dict.get('name_lst')
+        #     print(self.net_path)
+        #     print(self.name_lst)
+        # except Exception as e:
+        #     print("error:", e)
+        #     pass
+        # if not p.is_alive():
+        #     self.isFinishTrain = True
+        #     self.faceRecognitionButton.setEnabled(True)
+
+        # method2:
         self.thread = VideoTrainThread(self.dataset)
         self.thread.train_successful_signal.connect(self.successful_train)
         self.thread.start()
 
+        # method3:
         # self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
         # self.isFinishClassify = True
         # preProcess.OCRprocessing(self.dataset, self.name_lst)
@@ -450,7 +472,7 @@ class App(QWidget):
             self.name_lst = info_dict['name_lst']
             self.isFinishTrain = True
             self.faceRecognitionButton.setEnabled(True)
-            
+
 
 class formatDialog(QDialog):
     def __init__(self):
@@ -464,6 +486,15 @@ class formatDialog(QDialog):
         self.rowLineEdit.setValidator(row_validator)
         column_validator = QRegExpValidator(regx, self.columnLineEdit)
         self.columnLineEdit.setValidator(column_validator)
+
+def trainProcess(dataset, return_dict):
+    time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+    print(time)
+    net_path, name_lst = torchTrain.trainandsave(dataset)
+    return_dict['net_path'] = net_path
+    return_dict['name_lst'] = name_lst
+    time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+    print(time)
 
 if __name__=="__main__":
     app = QApplication(sys.argv)
