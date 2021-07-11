@@ -39,7 +39,7 @@ class ProcessThread(QThread):
         try:
             tmp_dict = {}  # OCR already recognized name in one second
             for num_frame, frame in self.frames_dict.items():
-                image, tmp_dict = faceClassify2.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
+                image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
                 self.process_pixmap_signal.emit(image)
         except Exception as e:
             print("error:", e)
