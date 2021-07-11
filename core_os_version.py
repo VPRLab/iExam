@@ -24,6 +24,26 @@ import configparser
 from multiprocessing import Process
 # import faceClassify_test
 
+class ProcessThread(QThread):
+    process_pixmap_signal = pyqtSignal(np.ndarray)
+
+    def __init__(self, dataset_path, name_lst, viewInfo, frames_dict):
+        super().__init__()
+        self.dataset = dataset_path
+        self.name_lst = name_lst
+        self.viewInfo = viewInfo
+        self.frames_dict = frames_dict
+
+
+    def run(self):
+        try:
+            tmp_dict = {}  # OCR already recognized name in one second
+            for num_frame, frame in self.frames_dict.items():
+                image, tmp_dict = faceClassify2.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
+                self.process_pixmap_signal.emit(image)
+        except Exception as e:
+            print("error:", e)
+            pass
 
 class VideoClassifyThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
@@ -35,25 +55,43 @@ class VideoClassifyThread(QThread):
         self.dataset = dataset_path
         self.name_lst = name_lst
         self.viewInfo = viewInfo
+        self.threads = {}
 
     def run(self):
         cap = cv2.VideoCapture(self.video)
         self.viewInfo['Width'] = int(cap.get(3))
         self.viewInfo['Height'] = int(cap.get(4))
         num_frame = 1
+        num_threads = 6
+        frames_lst = []  # frames_lst=[{}, {}, {}]
         self.viewInfo['fps'] = int(cap.get(5))
-        tmp_dict = {}  # OCR already recognized name in one second
+        print('num threads:', num_threads)
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
+        for i in range(num_threads):
+            frames_lst.append({})
         while True:
             ret, cv_img = cap.read()
-            # if ret and num_frame % 3 == 0:
             if ret:
-                print('the number of captured frame: ', num_frame)
-                image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo, tmp_dict)
-                # image  = faceClassify_test.catchFaceAndClassify(self.dataset, self.name_lst, cv_img, num_frame, self.viewInfo)
-                self.change_pixmap_signal.emit(image)
-            if not ret:
+                try:
+                    print('the number of captured frame: ', num_frame)
+                    for i in range(num_threads):
+                        if num_frame % num_threads == i:
+                            frames_lst[i][str(num_frame)] = cv_img
+                    if num_frame % (self.viewInfo['fps'] * self.viewInfo['ocr_period'] * num_threads) == 0:
+                        print(len(frames_lst[0]))
+                        self.multithread_classify(frames_lst)
+                        frames_lst.clear()
+                        for i in range(num_threads):
+                            frames_lst.append({})
+
+                        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+                        print(time)
+                except Exception as e:
+                    print("error:", e)
+                    pass
+            else:
+                self.multithread_classify(frames_lst)  # if frames_lst store some images, but not full
                 cap.release()
                 break
             num_frame += 1
@@ -69,6 +107,25 @@ class VideoClassifyThread(QThread):
         elif len(os.listdir(self.dataset)) >= 10:
             self.classify_finish_signal.emit(1)
             return
+
+    def multithread_classify(self, frames_lst):
+        try:
+            num_threads = len(frames_lst)
+            for i in range(num_threads):
+                self.threads[i] = ProcessThread(self.dataset, self.name_lst, self.viewInfo, frames_lst[i])
+                self.threads[i].process_pixmap_signal.connect(self.emit_image)
+                self.threads[i].start()
+            for i in range(num_threads):
+                self.threads[i].quit()
+                self.threads[i].wait()
+
+        except Exception as e:
+            print("error:", e)
+            pass
+
+    def emit_image(self, img):
+        """emit image as signal to main class"""
+        self.change_pixmap_signal.emit(img)
 
 
 class VideoTrainThread(QThread):
@@ -115,7 +172,7 @@ class VideoTestThread(QThread):
             studyCollection[name] = 0
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
-        while cap.isOpened():
+        while True:
             ret, cv_img = cap.read()  # read one frame
             if not ret:
                 cap.release()
@@ -195,7 +252,7 @@ class App(QWidget):
 
         # face collection
         self.isFinishUpload = False
-        # self.uploadRosterButton.toggled.connect(self.uploadRoster)  # upload all students roster
+        self.uploadRosterButton.toggled.connect(self.uploadRoster)  # upload all students roster
         self.isFinishFormat = False
         self.clipFormatButton.toggled.connect(self.addInputFormat)  # input view format
         self.isFinishClassify = False
@@ -228,11 +285,11 @@ class App(QWidget):
         self.viewInfo['study_period'] = self.config.getint('period', 'study_period')
 
 
-        self.dataset = 'marked_image_5min'
+        # self.dataset = 'marked_image_5min'
         # self.net_path = 'net_params_5min.pth'
         # self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
         # self.faceRecognitionButton.setEnabled(True)
-        self.uploadRosterButton.toggled.connect(self.trainData)
+        # self.uploadRosterButton.toggled.connect(self.trainData)
 
 
 
