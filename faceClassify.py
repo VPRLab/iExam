@@ -13,12 +13,6 @@ def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict
     elif platform.system() == 'Darwin':
         pytesseract.pytesseract.tesseract_cmd = '/usr/local/bin/tesseract'
 
-    fps = viewInfo.get('fps')
-    ocr_period = viewInfo.get('ocr_period')
-    if num_frame % (fps * ocr_period) == 0:  # every period reset tmp_dict
-        tmp_dict.clear()
-        print('clear tmp dict')
-
     grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # change to greystyle
     row = viewInfo.get('Row')
     column = viewInfo.get('Column')
@@ -46,7 +40,7 @@ def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict
 
             else:
                 cropped = grey[clip_height * (face_col + 1) - 32:clip_height * (face_col + 1), clip_width * face_row:clip_width * face_row + 120]  # decrease length
-                cropped = cv2.resize(cropped, None, fx=1.2, fy=1.2)
+                cropped = cv2.resize(cropped, None, fx=7, fy=7)
                 # if pixel greyscale>185, set this pixel=255, preprocess the character image to get good quality for OCR
                 ret, thresh1 = cv2.threshold(cropped, 185, 255, cv2.THRESH_TOZERO)
                 text = pytesseract.image_to_string(thresh1)  # OCR
