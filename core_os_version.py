@@ -23,6 +23,13 @@ import numpy as np
 import configparser
 from multiprocessing import Process
 # import faceClassify_test
+from PIL import Image
+import torchvision.transforms as transforms
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+import torch
+
 
 class ProcessThread(QThread):
     process_pixmap_signal = pyqtSignal(np.ndarray)
@@ -155,6 +162,21 @@ class VideoTestThread(QThread):
         self.net_path = net_path
         self.viewInfo = viewInfo
 
+        self.net = models.alexnet(pretrained=True)
+        self.net.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, len(name_lst)),
+        )
+        self.DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.net.to(self.DEVICE)
+        # load net
+        self.net.load_state_dict(torch.load(self.net_path))
+
     def run(self):
         cap = cv2.VideoCapture(self.video)
         self.viewInfo['Width'] = int(cap.get(3))
@@ -182,8 +204,11 @@ class VideoTestThread(QThread):
 
             # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
             #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo)
-            image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-                                                                            self.net_path, studyCollection, self.viewInfo, tmp_dict)
+
+            # image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
+            #                                                                 self.net_path, studyCollection, self.viewInfo, tmp_dict)
+            image, namedict, studyCollection, tmp_dict = self.recognize(cv_img, namedict, num_frame, studyCollection, tmp_dict)
+
             # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
             #                                                                 self.net_path, studyCollection, time_slot)
 
@@ -230,6 +255,106 @@ class VideoTestThread(QThread):
                 f.write('\n')
 
         f.close()
+
+    def recognize(self, frame, namedict, frameCounter, studyCollection, tmp_dict):
+        classes = self.name_lst
+        classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
+
+        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        row = self.viewInfo.get('Row')
+        column = self.viewInfo.get('Column')
+        clip_width = int(self.viewInfo.get('Width') / row)  # 256
+        clip_height = int(self.viewInfo.get('Height') / column)  # 144
+        fps = self.viewInfo.get('fps')
+        recognize_period = self.viewInfo.get('recognize_period')
+        study_period = self.viewInfo.get('study_period')
+        if frameCounter % int(fps * recognize_period) == 0:  # every recognize period reset tmp_dict
+            tmp_dict.clear()
+            print('clear tmp dict')
+        if frameCounter % int(fps * study_period) == 1:  # every study period reset
+            for k in studyCollection.keys():
+                studyCollection[k] = 0
+
+        label = -1
+        try:
+            for j in range(row):
+                for i in range(column):
+                    if (str(j), str(i)) in tmp_dict.keys():
+                        label = tmp_dict[str(j), str(i)]
+                        cv2.putText(frame, classes[label], (clip_width * j + 30, clip_height * i + 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
+                    else:
+                        cropped = grey[clip_height * i:clip_height * (i + 1),
+                                  clip_width * j:clip_width * (j + 1)]  # single cell
+                        # cv2.imshow("cropped", cropped)
+                        face_rects = classfier.detectMultiScale(cropped, scaleFactor=1.2, minNeighbors=3,
+                                                                minSize=(32, 32))
+                        # print('num of detected face: ', len(face_rects))
+                        # print([j, i])
+                        # cv2.waitKey(200)
+                        if len(face_rects) > 0:
+                            for face_rect in face_rects:
+                                x, y, w, h = face_rect
+                                image = cropped[y - 10:y + h + 10, x - 10:x + w + 10]
+                                # opencv to PIL: BGR2RGB
+                                PIL_image = self.cv2pil(image)
+                                if PIL_image is None:
+                                    continue
+                                # using model to recognize
+                                label = self.predict_model(PIL_image)
+                                if label != -1:
+                                    # print([j, i], classes[label])
+                                    # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
+                                    cv2.putText(frame, classes[label], (clip_width * j + 30, clip_height * i + 30),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
+                                    tmp_dict[(str(j), str(i))] = label
+                                else:
+                                    continue
+
+                    if label != -1:
+                        if namedict[classes[label]] == []:
+                            namedict[classes[label]].append(frameCounter)
+                            namedict[classes[label]].append(1)
+                        else:
+                            namedict[classes[label]][1] += 1
+                        # get the time of this student appear in a time slot
+                        studyCollection[classes[label]] += 1
+                        label = -1
+        except Exception as e:
+            print("frame number:", frameCounter, e)
+            pass
+
+        return frame, namedict, studyCollection, tmp_dict
+
+    def cv2pil(self, image):
+        if image.size != 0:
+            return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        else:
+            return None
+
+    def predict_model(self, image):
+
+        data_transform = transforms.Compose([
+            transforms.Resize((224, 224)),  # reszie image to 224*224
+            transforms.CenterCrop(224),  # center crop 224*224
+            transforms.ToTensor()  # each pixel to tensor
+        ])
+        image = data_transform(image)  # change PIL image to tensor
+        image = image.view(-1, 3, 224, 224)
+
+        output = self.net(image.to(self.DEVICE))
+        prob = F.softmax(output[0], dim=0).detach()
+        idx = torch.argmax(prob).item()
+        pred = output.max(1, keepdim=True)[1]
+        if pred.item() != idx:
+            print('no', pred.item())
+        # print('output:', F.softmax(output[0].cpu().detach().numpy(), dim=0))
+        # print('output:', prob)
+        if prob[idx] > 0.98:
+            # print('output:', prob)
+            return idx
+        else:
+            return -1
 
 
 class App(QWidget):
@@ -286,8 +411,8 @@ class App(QWidget):
 
 
         # self.dataset = 'marked_image_5min'
-        # self.net_path = 'net_params_5min.pth'
-        # self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
+        # self.net_path = 'net_params_5min_alexnet_gpu.pth'
+        # self.name_lst = ['AnboWANG', 'BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
         # self.faceRecognitionButton.setEnabled(True)
         # self.uploadRosterButton.toggled.connect(self.trainData)
 
