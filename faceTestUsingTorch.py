@@ -4,6 +4,12 @@ import torch
 import torchvision.transforms as transforms
 from torchTrain import Net
 import pandas as pd
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+
+net = models.alexnet(pretrained=True)
 
 # use single cell (256*144) to predict not use captured face
 # def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection, time_slot, viewInfo):
@@ -86,10 +92,14 @@ def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection,
                             if PIL_image is None:
                                 continue
                             # using model to recognize
-                            label = predict_model(PIL_image, net_path, len(classes))
-                            # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
-                            cv2.putText(frame, classes[label], (clip_width * j +30, clip_height * i +30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
-                            tmp_dict[(str(j), str(i))] = label
+                            label = predict_model(PIL_image, net_path, classes)
+                            if label != -1:
+                                # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
+                                cv2.putText(frame, classes[label], (clip_width * j +30, clip_height * i +30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
+                                tmp_dict[(str(j), str(i))] = label
+                            else:
+                                continue
+
 
                 if label != -1:
                     if namedict[classes[label]]==[]:
@@ -99,6 +109,7 @@ def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection,
                         namedict[classes[label]][1] += 1
                     # get the time of this student appear in a time slot
                     studyCollection[classes[label]] += 1
+                    label = -1
     except Exception as e:
         print("frame number:", frameCounter, e)
         pass
@@ -261,8 +272,8 @@ def recognize(classes, frame, namedict, frameCounter, net_path, studyCollection,
 
 def get_transform():
     return transforms.Compose([
-            transforms.Resize(32),  # reszie image to 32*32
-            transforms.CenterCrop(32),  # center crop 32*32
+            transforms.Resize((224, 224)),  # reszie image to 224*224
+            transforms.CenterCrop(224),  # center crop 224*224
             transforms.ToTensor()  # each pixel to tensor
         ])
 
@@ -272,20 +283,37 @@ def cv2pil(image):
     else:
         return None
 
-def predict_model(image, net_path, class_num):
+def predict_model(image, net_path, classes):
 
     data_transform = get_transform()
     image = data_transform(image)  # change PIL image to tensor
-    image = image.view(-1, 3, 32, 32)
-    net = Net(class_num)
-    # net = torch.load(net_path)
+    image = image.view(-1, 3, 224, 224)
+    # net = Net(class_num)
+    net.classifier = nn.Sequential(
+        nn.Dropout(),
+        nn.Linear(256 * 6 * 6, 4096),
+        nn.ReLU(inplace=True),
+        nn.Dropout(),
+        nn.Linear(4096, 4096),
+        nn.ReLU(inplace=True),
+        nn.Linear(4096, len(classes)),
+    )
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(DEVICE)
     # load net
     net.load_state_dict(torch.load(net_path))
+
+
     output = net(image.to(DEVICE))
-    # get the maximum
-    pred = output.max(1, keepdim=True)[1]
-    return pred.item()
+    prob = F.softmax(output[0], dim=0).detach()
+    idx = torch.argmax(prob).item()
+    # pred = output.max(1, keepdim=True)[1]
+    # if pred.item() != idx:
+    #     print('no', pred.item())
+    # print('output:', prob)
+    if prob[idx] > 0.95:
+        return idx
+    else:
+        return -1
 
 
