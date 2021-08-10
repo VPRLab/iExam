@@ -159,7 +159,7 @@ def drawGraph(feedback_name, log_name):
     plt.tick_params(axis='x', labelsize=7)  # set xlabel size
     plt.xticks(rotation=35)
     plt.ylabel('Time(seconds)')
-    plt.title('Consecutive disappear time for 90min test video')
+    plt.title('Consecutive disappear time for testing video')
 
     tmp_name = []
     tmp_data = []
