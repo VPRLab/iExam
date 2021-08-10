@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
 import time
+from torchvision import models
 
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -16,8 +17,8 @@ def loadtraindata(path):
     # print('path:', path)
     # print('filename:', filename)
     trainset = torchvision.datasets.ImageFolder(path,
-                transform=transforms.Compose([transforms.Resize((32, 32)),  # resize image (h,w)
-                transforms.CenterCrop(32), transforms.ToTensor()]))
+                transform=transforms.Compose([transforms.Resize((224, 224)),  # resize image (h,w)
+                transforms.CenterCrop(224), transforms.ToTensor()]))
     print('classes: ', trainset.classes)  # all classes in dataset
     print('number of classes: ', len(trainset.classes))
 
@@ -42,7 +43,7 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
 
         x = self.pool(F.relu(self.conv1(x)))  # F is torch.nn.functional
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)  # .view( ) is a method tensor, which automatically change tensor size but elements number not change
+        x = x.view(x.shape[0], -1)  # .view( ) is a method tensor, which automatically change tensor size but elements number not change
 
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -54,10 +55,23 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
 def trainandsave(path):
     trainloader, filename, classes = loadtraindata(path)
 
-    net = Net(len(classes))
+    # net = Net(len(classes))
+    # print(net)
+
+    net = models.alexnet(pretrained=True)
+    net.classifier = nn.Sequential(
+        nn.Dropout(),
+        nn.Linear(256 * 6 * 6, 4096),
+        nn.ReLU(inplace=True),
+        nn.Dropout(),
+        nn.Linear(4096, 4096),
+        nn.ReLU(inplace=True),
+        nn.Linear(4096, len(classes)),
+    )
     print(net)
+
     net.to(DEVICE)
-    optimizer = optim.SGD(net.parameters(), lr=0.008, momentum=0.9)  # learning rate=0.002
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)  # learning rate=0.002
     criterion = nn.CrossEntropyLoss()  # loss function
     # training part
     for epoch in range(5):  # 5 epoch

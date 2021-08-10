@@ -57,8 +57,7 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
         x = self.pool(F.relu(self.conv1(x)))  # F is torch.nn.functional
         x = self.pool(F.relu(self.conv2(x)))
         # print(x.shape)
-        x = x.view(x.shape[0],
-                   -1)  # .view( ) is a reshape operation, which automatically change tensor size but elements number not change
+        x = x.view(x.shape[0], -1)  # .view( ) is a reshape operation, which automatically change tensor size but elements number not change
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -67,37 +66,39 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
 
 def trainandsave(path):
     train_loader, validate_loader, test_loader, filename, classes = loadtraindata(path)
-
+    # network 1:
     # net = Net(len(classes))
-    # print(net)
+    # network 2:
+    # net = models.alexnet(pretrained=True)
+    # net.features = nn.Sequential(
+    #     nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
+    #     nn.ReLU(inplace=True),
+    #     nn.MaxPool2d(kernel_size=3, stride=2),
+    #     nn.Conv2d(64, 192, kernel_size=5, padding=2),
+    #     nn.ReLU(inplace=True),
+    #     nn.MaxPool2d(kernel_size=3, stride=2),
+    #     nn.Conv2d(192, 384, kernel_size=3, padding=1),
+    #     nn.ReLU(inplace=True),
+    #     nn.Conv2d(384, 256, kernel_size=3, padding=1),
+    #     nn.ReLU(inplace=True),
+    #     # nn.Conv2d(256, 256, kernel_size=3, padding=1),
+    #     # nn.ReLU(inplace=True),
+    #     nn.MaxPool2d(kernel_size=3, stride=2),
+    # )
+    # net.classifier = nn.Sequential(
+    #     nn.Dropout(),
+    #     nn.Linear(256 * 6 * 6, 4096),
+    #     nn.ReLU(inplace=True),
+    #     nn.Dropout(),
+    #     nn.Linear(4096, 4096),
+    #     nn.ReLU(inplace=True),
+    #     nn.Linear(4096, len(classes)),
+    # )
+    # network 3:
+    net = models.resnet18(pretrained=True)
+    net.fc = nn.Linear(512, len(classes))
 
-    net = models.alexnet(pretrained=True)
-    net.features = nn.Sequential(
-        nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
-        nn.ReLU(inplace=True),
-        nn.MaxPool2d(kernel_size=3, stride=2),
-        nn.Conv2d(64, 192, kernel_size=5, padding=2),
-        nn.ReLU(inplace=True),
-        nn.MaxPool2d(kernel_size=3, stride=2),
-        nn.Conv2d(192, 384, kernel_size=3, padding=1),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(384, 256, kernel_size=3, padding=1),
-        nn.ReLU(inplace=True),
-        # nn.Conv2d(256, 256, kernel_size=3, padding=1),
-        # nn.ReLU(inplace=True),
-        nn.MaxPool2d(kernel_size=3, stride=2),
-    )
-    net.classifier = nn.Sequential(
-        nn.Dropout(),
-        nn.Linear(256 * 6 * 6, 4096),
-        nn.ReLU(inplace=True),
-        nn.Dropout(),
-        nn.Linear(4096, 4096),
-        nn.ReLU(inplace=True),
-        nn.Linear(4096, len(classes)),
-    )
     print(net)
-
     net.to(DEVICE)
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)  # learning rate=0.008
     criterion = nn.CrossEntropyLoss()  # loss function
