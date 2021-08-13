@@ -8,6 +8,7 @@ import torch.optim as optim
 import time
 import numpy as np
 from torchvision import models
+from torch.cuda.amp import autocast, GradScaler
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -19,8 +20,8 @@ def loadtraindata(path):
     # print('filename:', filename)
     dataset = torchvision.datasets.ImageFolder(path,
                                                transform=transforms.Compose(
-                                                   [transforms.Resize((224, 224)),  # resize image (h,w)
-                                                    transforms.CenterCrop(224), transforms.ToTensor()]))
+                                                   [transforms.Resize((32, 32)),  # resize image (h,w)
+                                                    transforms.CenterCrop(32), transforms.ToTensor()]))
     print('classes: ', dataset.classes)  # all classes in dataset
     print('number of classes: ', len(dataset.classes))
     print(dataset)
@@ -33,14 +34,14 @@ def loadtraindata(path):
 
     # batch_size: number of iteration in each time
     # shuffle: whether random sort in each time
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=8,
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=8,
                                                pin_memory=True)
-    validate_loader = torch.utils.data.DataLoader(validate_dataset, batch_size=20, shuffle=False, num_workers=8,
+    validate_loader = torch.utils.data.DataLoader(validate_dataset, batch_size=10, shuffle=False, num_workers=8,
                                                   pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=200, shuffle=False, num_workers=2,
-                                              pin_memory=True)
+    # test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=200, shuffle=False, num_workers=2,
+    #                                           pin_memory=True)
 
-    return train_loader, validate_loader, test_loader, filename, tuple(dataset.classes)
+    return train_loader, validate_loader, filename, tuple(dataset.classes)
 
 
 class Net(nn.Module):  # define net, which extends torch.nn.Module
@@ -65,7 +66,7 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
 
 
 def trainandsave(path):
-    train_loader, validate_loader, test_loader, filename, classes = loadtraindata(path)
+    train_loader, validate_loader, filename, classes = loadtraindata(path)
     # network 1:
     # net = Net(len(classes))
     # network 2:
@@ -95,8 +96,32 @@ def trainandsave(path):
     #     nn.Linear(4096, len(classes)),
     # )
     # network 3:
-    net = models.resnet18(pretrained=True)
-    net.fc = nn.Linear(512, len(classes))
+    # net = models.resnet18(pretrained=True)
+    # net.fc = nn.Linear(512, len(classes))
+    # network 4:
+    # net = models.mobilenet_v3_small(pretrained=True)
+    # net.classifier = nn.Sequential(
+    #     nn.Linear(576, 1024),
+    #     nn.Hardswish(inplace=True),
+    #     nn.Dropout(p=0.2, inplace=True),
+    #     nn.Linear(1024, len(classes)),
+    # )
+    # network 5:
+    net = models.densenet121(pretrained=True)
+    net.classifier = nn.Linear(1024, len(classes))
+    # network 6:
+    net = models.vgg11_bn(pretrained=True)
+    net.classifier = net.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, len(classes)),
+    )
+    # print(torch.cuda.max_memory_reserved(DEVICE))
+    # print(torch.cuda.max_memory_allocated(DEVICE))
 
     print(net)
     net.to(DEVICE)
@@ -108,91 +133,107 @@ def trainandsave(path):
     val_loss_set = []
     train_correct_set = []
     val_correct_set = []
-    try:
-        for epoch in range(25):  # 3 epoch
-            # each epoch train all images, so total train 5 times
-            net.train()
-            running_loss = 0.0  # loss output, training 200 images will output running_loss
-            tr_loss = []
-            train_correct = 0
-            train_total = 0
-            for i, (inputs, labels) in enumerate(train_loader):
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                optimizer.zero_grad()  # reset gradient to 0, because feed back will add last gradient
-                # forward + backward + optimize
+    # try:
+    scaler = GradScaler()
+
+    for epoch in range(25):  # 3 epoch
+        # each epoch train all images, so total train 5 times
+        net.train()
+        running_loss = 0.0  # loss output, training 200 images will output running_loss
+        tr_loss = []
+        train_correct = 0
+        train_total = 0
+        for i, (inputs, labels) in enumerate(train_loader):
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            optimizer.zero_grad()  # reset gradient to 0, because feed back will add last gradient
+            # forward + backward + optimize
+            with autocast():
                 outputs = net(inputs)  # put input to cnn net
                 loss = criterion(outputs, labels)  # calculate loss
-                tr_loss.append(loss.data.cpu())
-                pred = outputs.max(1, keepdim=True)[1]
-                train_correct += pred.eq(labels.view_as(pred)).sum().item()
-                loss.backward()  # loss feed backward
-                optimizer.step()  # refresh all parameter
-                running_loss += loss.data  # loss accumulation
-                train_total += 20
 
-                if i % 200 == 199:
-                    print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, i + 1, running_loss / 200))  # mean loss for each 200 images
-                    running_loss = 0.0  # reset
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
-            train_loss = np.mean(tr_loss)
-            train_loss_set.append(train_loss)
-            train_correct_set.append(float(train_correct)/train_total)
-            print('tr_loss:',tr_loss)
-            print('train loss:', train_loss)
+            tr_loss.append(loss.data.cpu())
+            pred = outputs.max(1, keepdim=True)[1]
+            train_correct += pred.eq(labels.view_as(pred)).sum().item()
+            # loss.backward()  # loss feed backward
+            # optimizer.step()  # refresh all parameter
+            running_loss += loss.data.cpu()  # loss accumulation
+            train_total += 10
 
-            net.eval()
-            val_loss = []
-            val_correct = 0
-            val_total = 0
-            with torch.no_grad():
-                for i, (inputs, labels) in enumerate(validate_loader):
-                    inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            if i % 200 == 199:
+                print('[%d, %5d] loss: %.3f' %
+                      (epoch + 1, i + 1, running_loss / 200))  # mean loss for each 200 images
+                running_loss = 0.0  # reset
+
+        train_loss = np.mean(tr_loss)
+        train_loss_set.append(train_loss)
+        train_correct_set.append(float(train_correct)/train_total)
+        # print('tr_loss:',tr_loss)
+        # print('train loss:', train_loss)
+
+        net.eval()
+        val_loss = []
+        val_correct = 0
+        val_total = 0
+        with torch.no_grad():
+            for i, (inputs, labels) in enumerate(validate_loader):
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                with autocast():
                     outputs = net(inputs)  # put input to cnn net
                     loss = criterion(outputs, labels)  # calculate loss
-                    # print("loss data:", loss.data)
-                    val_loss.append(loss.data.cpu())  # loss accumulation
-                    pred = outputs.max(1, keepdim=True)[1]
-                    val_correct += pred.eq(labels.view_as(pred)).sum().item()
-                    val_total += 20
+                # print("loss data:", loss.data)
+                val_loss.append(loss.data.cpu())  # loss accumulation
+                pred = outputs.max(1, keepdim=True)[1]
+                val_correct += pred.eq(labels.view_as(pred)).sum().item()
+                val_total += 10
 
-            validate_loss = np.mean(val_loss)
-            val_loss_set.append(validate_loss)
-            val_correct_set.append(float(val_correct) / val_total)
-            print('val_loss:', val_loss)
-            print('validate loss:', validate_loss)
-
+        validate_loss = np.mean(val_loss)
+        val_loss_set.append(validate_loss)
+        val_correct_set.append(float(val_correct) / val_total)
+        # print('val_loss:', val_loss)
+        # print('validate loss:', validate_loss)
+        print('---------------------------')
         print('train_loss_set:', train_loss_set)
         print('val_loss_set:', val_loss_set)
         print('train_accuracy_set:', train_correct_set)
         print('val_accuracy_set:', val_correct_set)
 
-        # test_loss = 0
-        # correct = 0
-        # total = 0.0
-        # with torch.no_grad():
-        #     for x, y in test_loader:
-        #         x, y = x.to(DEVICE), y.to(DEVICE)
-        #         output = net(x)
-        #
-        #         loss = criterion(output, y)  # calculate loss
-        #         test_loss += loss.data  # loss accumulation
-        #
-        #         # test_loss += F.nll_loss(output, y, reduction='sum').item()
-        #         # print(test_loss)
-        #         pred = output.max(1, keepdim=True)[1]
-        #         correct += pred.eq(y.view_as(pred)).sum().item()
-        #         total += 200
-        #         # print('correct:', correct, ' total number: ', total, ' accuracy: ', float(correct) / total)
-        #
-        # test_loss /= len(test_loader.dataset)
-        # print('test loss={:.4f}, accuracy={:.4f}'.format(test_loss, float(correct) / len(test_loader.dataset)))
+    print('*********************************')
+    print('train_loss_set =', train_loss_set)
+    print('val_loss_set =', val_loss_set)
+    print('train_accuracy_set =', train_correct_set)
+    print('val_accuracy_set =', val_correct_set)
 
-    except Exception as e:
-        print("error:", e)
-        pass
+    # test_loss = 0
+    # correct = 0
+    # total = 0.0
+    # with torch.no_grad():
+    #     for x, y in test_loader:
+    #         x, y = x.to(DEVICE), y.to(DEVICE)
+    #         output = net(x)
+    #
+    #         loss = criterion(output, y)  # calculate loss
+    #         test_loss += loss.data  # loss accumulation
+    #
+    #         # test_loss += F.nll_loss(output, y, reduction='sum').item()
+    #         # print(test_loss)
+    #         pred = output.max(1, keepdim=True)[1]
+    #         correct += pred.eq(y.view_as(pred)).sum().item()
+    #         total += 200
+    #         # print('correct:', correct, ' total number: ', total, ' accuracy: ', float(correct) / total)
+    #
+    # test_loss /= len(test_loader.dataset)
+    # print('test loss={:.4f}, accuracy={:.4f}'.format(test_loss, float(correct) / len(test_loader.dataset)))
+
+
     print('Finished Training')
-    torch.save(net.state_dict(), 'net_params_' + filename + '_alexnettest.pth')  # only save parameter
+    torch.save(net.state_dict(), 'net_params_' + filename + '_vgg11bn.pth')  # only save parameter
+    # except Exception as e:
+    #     print("error:", e)
+    #     pass
 
     return 'net_params_' + filename + '.pth', classes
 
