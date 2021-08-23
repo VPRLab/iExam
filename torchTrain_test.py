@@ -20,8 +20,8 @@ def loadtraindata(path):
     # print('filename:', filename)
     dataset = torchvision.datasets.ImageFolder(path,
                                                transform=transforms.Compose(
-                                                   [transforms.Resize((32, 32)),  # resize image (h,w)
-                                                    transforms.CenterCrop(32), transforms.ToTensor()]))
+                                                   [transforms.Resize((224, 224)),  # resize image (h,w)
+                                                    transforms.CenterCrop(224), transforms.ToTensor()]))
     print('classes: ', dataset.classes)  # all classes in dataset
     print('number of classes: ', len(dataset.classes))
     print(dataset)
@@ -34,9 +34,9 @@ def loadtraindata(path):
 
     # batch_size: number of iteration in each time
     # shuffle: whether random sort in each time
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=8,
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=8,
                                                pin_memory=True)
-    validate_loader = torch.utils.data.DataLoader(validate_dataset, batch_size=10, shuffle=False, num_workers=8,
+    validate_loader = torch.utils.data.DataLoader(validate_dataset, batch_size=20, shuffle=False, num_workers=8,
                                                   pin_memory=True)
     # test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=200, shuffle=False, num_workers=2,
     #                                           pin_memory=True)
@@ -70,31 +70,16 @@ def trainandsave(path):
     # network 1:
     # net = Net(len(classes))
     # network 2:
-    # net = models.alexnet(pretrained=True)
-    # net.features = nn.Sequential(
-    #     nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
-    #     nn.ReLU(inplace=True),
-    #     nn.MaxPool2d(kernel_size=3, stride=2),
-    #     nn.Conv2d(64, 192, kernel_size=5, padding=2),
-    #     nn.ReLU(inplace=True),
-    #     nn.MaxPool2d(kernel_size=3, stride=2),
-    #     nn.Conv2d(192, 384, kernel_size=3, padding=1),
-    #     nn.ReLU(inplace=True),
-    #     nn.Conv2d(384, 256, kernel_size=3, padding=1),
-    #     nn.ReLU(inplace=True),
-    #     # nn.Conv2d(256, 256, kernel_size=3, padding=1),
-    #     # nn.ReLU(inplace=True),
-    #     nn.MaxPool2d(kernel_size=3, stride=2),
-    # )
-    # net.classifier = nn.Sequential(
-    #     nn.Dropout(),
-    #     nn.Linear(256 * 6 * 6, 4096),
-    #     nn.ReLU(inplace=True),
-    #     nn.Dropout(),
-    #     nn.Linear(4096, 4096),
-    #     nn.ReLU(inplace=True),
-    #     nn.Linear(4096, len(classes)),
-    # )
+    net = models.alexnet(pretrained=True)
+    net.classifier = nn.Sequential(
+        nn.Dropout(),
+        nn.Linear(256 * 6 * 6, 4096),
+        nn.ReLU(inplace=True),
+        nn.Dropout(),
+        nn.Linear(4096, 4096),
+        nn.ReLU(inplace=True),
+        nn.Linear(4096, len(classes)),
+    )
     # network 3:
     # net = models.resnet18(pretrained=True)
     # net.fc = nn.Linear(512, len(classes))
@@ -107,19 +92,30 @@ def trainandsave(path):
     #     nn.Linear(1024, len(classes)),
     # )
     # network 5:
-    net = models.densenet121(pretrained=True)
-    net.classifier = nn.Linear(1024, len(classes))
+    # net = models.densenet121(pretrained=True)
+    # net.classifier = nn.Linear(1024, len(classes))
     # network 6:
-    net = models.vgg11_bn(pretrained=True)
-    net.classifier = net.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, len(classes)),
-    )
+    # net = models.vgg11_bn(pretrained=True)
+    # net.classifier = net.classifier = nn.Sequential(
+    #         nn.Linear(512 * 7 * 7, 4096),
+    #         nn.ReLU(True),
+    #         nn.Dropout(),
+    #         nn.Linear(4096, 4096),
+    #         nn.ReLU(True),
+    #         nn.Dropout(),
+    #         nn.Linear(4096, len(classes)),
+    # )
+    # network 7:
+    # net = models.googlenet(pretrained=True)
+    # net.fc = nn.Linear(1024, len(classes))
+    # network 8:
+    # net = models.squeezenet1_1(pretrained=True)
+    # net.classifier = nn.Sequential(
+    #     nn.Dropout(p=0.5),
+    #     nn.Conv2d(512, len(classes), kernel_size=1),
+    #     nn.ReLU(inplace=True),
+    #     nn.AdaptiveAvgPool2d((1, 1))
+    # )
     # print(torch.cuda.max_memory_reserved(DEVICE))
     # print(torch.cuda.max_memory_allocated(DEVICE))
 
@@ -161,7 +157,7 @@ def trainandsave(path):
             # loss.backward()  # loss feed backward
             # optimizer.step()  # refresh all parameter
             running_loss += loss.data.cpu()  # loss accumulation
-            train_total += 10
+            train_total += 20
 
             if i % 200 == 199:
                 print('[%d, %5d] loss: %.3f' %
@@ -188,7 +184,7 @@ def trainandsave(path):
                 val_loss.append(loss.data.cpu())  # loss accumulation
                 pred = outputs.max(1, keepdim=True)[1]
                 val_correct += pred.eq(labels.view_as(pred)).sum().item()
-                val_total += 10
+                val_total += 20
 
         validate_loss = np.mean(val_loss)
         val_loss_set.append(validate_loss)
@@ -230,7 +226,7 @@ def trainandsave(path):
 
 
     print('Finished Training')
-    torch.save(net.state_dict(), 'net_params_' + filename + '_vgg11bn.pth')  # only save parameter
+    torch.save(net.state_dict(), 'net_params_' + filename + 'squeezenet1_1.pth')  # only save parameter
     # except Exception as e:
     #     print("error:", e)
     #     pass
