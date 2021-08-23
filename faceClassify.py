@@ -40,15 +40,58 @@ def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict
 
             else:
                 cropped = grey[clip_height * (face_col + 1) - 32:clip_height * (face_col + 1), clip_width * face_row:clip_width * face_row + 120]  # decrease length
-                cropped = cv2.resize(cropped, None, fx=7, fy=7)
-                # if pixel greyscale>185, set this pixel=255, preprocess the character image to get good quality for OCR
-                ret, thresh1 = cv2.threshold(cropped, 185, 255, cv2.THRESH_TOZERO)
-                text = pytesseract.image_to_string(thresh1)  # OCR
-                text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
+                text = ''
+                for k in range(2, 8, 1):
+                    resized_text = cv2.resize(cropped, None, fx=k, fy=k)
+                    ret, thresh1 = cv2.threshold(resized_text, 185, 255, cv2.THRESH_TOZERO)
+                    text = pytesseract.image_to_string(thresh1)  # OCR
+                    text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
+                    if text == '':
+                        print('cannot recognize text using OCR frame num is:', num_frame, [face_row, face_col])
+                        # cv2.imwrite('cropped text.jpg', cropped_text)
+                        thresh1 = cv2.Canny(image=thresh1, threshold1=80, threshold2=150)
+                        text = pytesseract.image_to_string(thresh1)  # OCR
+                        text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
+                        if text == '':
+                            print('is empty ', [face_row, face_col], text, 'k=', k)
+                            continue
+                        else:
+                            text = string_comparison(text, name_lst)
+                            if text not in name_lst:
+                                print('not match ', [face_row, face_col], text, 'k=', k)
+                            else:
+                                # print('text:', text)
+                                break
+                    else:
+                        text = string_comparison(text, name_lst)
+                        if text not in name_lst:
+                            thresh1 = cv2.Canny(image=thresh1, threshold1=80, threshold2=150)
+                            text = pytesseract.image_to_string(thresh1)  # OCR
+                            text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
+                            if text == '':
+                                print('is empty ', [face_row, face_col], text, 'k=', k)
+                                continue
+                            else:
+                                text = string_comparison(text, name_lst)
+                                if text not in name_lst:
+                                    print('not match ', [face_row, face_col], text, 'k=', k)
+                                else:
+                                    # print('text:', text)
+                                    break
+                        else:
+                            # print('text:', text)
+                            break
+
+
+                # cropped = cv2.resize(cropped, None, fx=7, fy=7)
+                # # if pixel greyscale>185, set this pixel=255, preprocess the character image to get good quality for OCR
+                # ret, thresh1 = cv2.threshold(cropped, 185, 255, cv2.THRESH_TOZERO)
+                # text = pytesseract.image_to_string(thresh1)  # OCR
+                # text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                 if text == '':
                     continue
-                # print('before text is:', text)
-                text = string_comparison(text, name_lst)
+                # # print('before text is:', text)
+                # text = string_comparison(text, name_lst)
                 tmp_dict[(str(face_row), str(face_col))] = text  # add ocr result in dict and every one second refresh
                 try:
                     if text not in os.listdir(dataset) and text.isalpha():
