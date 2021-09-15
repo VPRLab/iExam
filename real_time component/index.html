@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src='https://unpkg.com/tesseract.js@v2.1.4/dist/tesseract.min.js'></script>
+	 <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+        <video id="video" autoplay onplay="videoOnLoad(this)"></video>
+        <canvas class="canvas" id="cv1"></canvas>
+        <div id=startMessage>
+          <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+        </div>
+        <div class="results"id="output"></div>
+          <div class="options">
+          <input type="checkbox" id="automode" name="automode" disabled>
+          <label for="automode">Auto Mode</label>
+          <br/>
+          <input type="checkbox" id="showArea" name="showArea" checked>
+          <label for="showArea">Show Area</label>
+          <br/>
+          <input type="checkbox" id="preprocess" name="preprocess" checked>
+          <label for="preprocess">Preprocess Image</label>
+          <br/>
+          <input type="checkbox" id="showImage" name="showImage">
+          <label for="showImage">Show Image</label>
+        </div>
+   </div>
+	 <div id="hint" style="margin-top: 10px">Draw on the stream above to select the text area.</div>
+  <img id="my_img"></img>
+  <script src="script.js"></script>
+</body>
+</html>
