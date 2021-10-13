@@ -23,7 +23,7 @@
 <script type="text/JavaScript">
 function openCvReady() {
     cv['onRuntimeInitialized']=()=>{
-        let FPS = 0.03;
+        let FPS = 0.04;
         let video = document.getElementById("cam_input"); // video is the id of video tag
         navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
         .then(function(stream) {
@@ -47,7 +47,7 @@ function openCvReady() {
         let minsize = new cv.Size(0, 0);
         let maxsize = new cv.Size(1000, 1000);
         let utils = new Utils();
-        let faceCascadeFile = 'haarcascade_frontalface_default.xml'; // path to xml
+        let faceCascadeFile = 'haarcascade_frontalface_default.xml';
         utils.createFileFromUrl(faceCascadeFile, '../haarcascades/'+faceCascadeFile, () => {
             classifier.load(faceCascadeFile); // in the callback, load the cascade from file 
         });
@@ -61,10 +61,8 @@ function openCvReady() {
                 cap.read(src);
                 src.copyTo(dst);
                 cv.cvtColor(dst, gray, cv.COLOR_RGBA2GRAY, 0);
-                console.log(cam_input.width);
-                console.log(cam_input.height);
                 try{
-                    classifier.detectMultiScale(gray, faces, 1.2, 3);
+                    classifier.detectMultiScale(gray, faces, 1.1, 3);
                     console.log("face size: "+ faces.size());
                 }catch(err){
                     console.log(err);
