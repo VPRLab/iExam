@@ -2,33 +2,38 @@
 
 from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QDialog
 from PyQt5.QtCore import pyqtSignal, QThread, QRegExp
-from PyQt5.uic import loadUi
+# from PyQt5.uic import loadUi
 from PyQt5.QtGui import QIcon, QImage, QPixmap, QTextCursor, QFont, QColor, QRegExpValidator
-
-
 import sys
+
 import cv2
 import threading
 from datetime import datetime
 import multiprocessing
+multiprocessing.freeze_support()  # for prevent exe keep opening itself 
 import os
 import faceClassify  # test face in one frame
 import torchTrain  # train by torch
-import preProcess  # OCR post processing
-import faceTestUsingTorch  # face recognition
+import preProcess  # OCR post-processing
+
 import evaluation  # draw graph
-import shutil
+from shutil import rmtree
 from collections import defaultdict
 import numpy as np
-import configparser
-from multiprocessing import Process
+from configparser import ConfigParser
+# from multiprocessing import Process
 # import faceClassify_test
 from PIL import Image
 import torchvision.transforms as transforms
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.nn.functional import softmax
 from torchvision import models
 import torch
+
+# import OCR_evaluation
+
+from ui_faceRecognition import Ui_faceRfecognition
+from ui_format import Ui_format
 
 
 class ProcessThread(QThread):
@@ -41,13 +46,17 @@ class ProcessThread(QThread):
         self.viewInfo = viewInfo
         self.frames_dict = frames_dict
 
+        # self.dataset = 'OCR_evaluation'
+
 
     def run(self):
         try:
             tmp_dict = {}  # OCR already recognized name in one second
             for num_frame, frame in self.frames_dict.items():
                 image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
+                # image, tmp_dict = OCR_evaluation.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
                 self.process_pixmap_signal.emit(image)
+            # print('tmp_dict:', tmp_dict)
         except Exception as e:
             print("error:", e)
             pass
@@ -155,13 +164,19 @@ class VideoTrainThread(QThread):
 class VideoTestThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     log_queue = pyqtSignal(str)
+    test_finish_signal = pyqtSignal(int)
     def __init__(self, video_path, name_lst, net_path, viewInfo):
         super().__init__()
         self.video = video_path
         self.name_lst = name_lst
         self.net_path = net_path
         self.viewInfo = viewInfo
-
+        self.threads = {}
+        self.studyCollection = {}
+        self.namedict = {}
+        self.num_threads = 6
+        self.count = 0  # for combine all thread study records
+        # alexNet:
         self.net = models.alexnet(pretrained=True)
         self.net.classifier = nn.Sequential(
             nn.Dropout(),
@@ -172,10 +187,19 @@ class VideoTestThread(QThread):
             nn.ReLU(inplace=True),
             nn.Linear(4096, len(name_lst)),
         )
-        self.DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # googleNet:
+        # self.net = models.googlenet(pretrained=True)
+        # self.net.fc = nn.Linear(1024, len(name_lst))
+
+        # resNet18
+        # self.net = models.resnet18(pretrained=True)
+        # self.net.fc = nn.Linear(512, len(name_lst))
+
+        self.DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.net.to(self.DEVICE)
         # load net
         self.net.load_state_dict(torch.load(self.net_path))
+        # self.net.load_state_dict(torch.load(self.net_path, map_location='cpu'))
 
     def run(self):
         cap = cv2.VideoCapture(self.video)
@@ -184,147 +208,227 @@ class VideoTestThread(QThread):
         fps = int(cap.get(5))
         self.viewInfo['fps'] = fps
         time_slot = int(fps * self.viewInfo.get('study_period'))
-
+        # for multiprocessing
+        frames_lst = [{} for i in range(self.num_threads)]  # frames_lst=[{}, {}, {}]
         num_frame = 1
-        studyCollection = {}
-        namedict = defaultdict(list)
-        # time_slot = 20 * int(fps)  # time slot(frame=20seconds*fps) for checking whether student is checked
-        tmp_dict = {}  # store the already recognized name in somewhere
         for name in self.name_lst:
-            studyCollection[name] = 0
+            self.studyCollection[name] = 0
+            self.namedict[name] = [sys.maxsize, 0]   # a large number for after replace
+
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
         while True:
             ret, cv_img = cap.read()  # read one frame
-            if not ret:
+            print('the number of captured frame: ', num_frame)
+
+            if ret:
+                for i in range(self.num_threads):
+                    if num_frame % self.num_threads == i:
+                        frames_lst[i][str(num_frame)] = cv_img
+                if num_frame % (self.viewInfo['fps'] * self.viewInfo['study_period'] * self.num_threads) == 0:
+                    # print(len(frames_lst[0]))
+                    self.multithread_test(frames_lst, time_slot, num_frame)
+                    frames_lst.clear()
+                    for i in range(self.num_threads):
+                        frames_lst.append({})
+
+                    time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
+                    print(time)
+
+            else:
+                # self.multithread_test(frames_lst, time_slot, num_frame)  # if frames_lst store some images, but not full will discard
                 cap.release()
                 break
 
-            print('the number of captured frame: ' + str(num_frame))
-
-            # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-            #                                                                 self.net_path, studyCollection, time_slot, self.viewInfo)
-
-            # image, namedict, studyCollection, tmp_dict = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-            #                                                                 self.net_path, studyCollection, self.viewInfo, tmp_dict)
-            image, namedict, studyCollection, tmp_dict = self.recognize(cv_img, namedict, num_frame, studyCollection, tmp_dict)
-
-            # image, namedict, studyCollection = faceTestUsingTorch.recognize(self.name_lst, cv_img, namedict, num_frame,
-            #                                                                 self.net_path, studyCollection, time_slot)
-
-            self.change_pixmap_signal.emit(image)
-
-            if num_frame % time_slot == 0:  # every one time slot check
-                log_tmp = []  # people not recognized in list
-
-                for k in studyCollection.keys():
-                    if studyCollection[k] == 0:
-                        log_tmp.append(k)
-                        log_tmp.append('\n')
-
-                fs = open('systemLog.txt', 'a')
-                if log_tmp:  # if log_tmp is not empty
-                    log_tmp.pop()  # remove the last \n
-                    line = 'The following people have not be recognized from ' + str((num_frame - time_slot)//int(fps)) + \
-                           's to ' + str(num_frame//int(fps)) + 's:\n' + "".join(log_tmp)
-                    self.log_queue.emit(line)
-                    fs.write(line + '\n')
-                else:
-                    line = 'all students can be recognized from ' + str((num_frame - time_slot)//int(fps)) + \
-                           's to ' + str(num_frame//int(fps)) + 's'
-                    self.log_queue.emit(line)
-                    fs.write(line + '\n')
-                fs.close()
-
             num_frame += 1
             cv2.waitKey(1)
+        self.write_feedback()
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
         self.log_queue.emit('Success: faceRecognition')
+        self.test_finish_signal.emit(1)
+        return
 
+
+    def multithread_test(self, frames_lst, time_slot, end_frame):
+        try:
+            for i in range(self.num_threads):
+                self.threads[i] = TestProcessThread(self.name_lst, self.viewInfo, self.net, frames_lst[i], time_slot, self.DEVICE, end_frame)
+                self.threads[i].recognize_pixmap_signal.connect(self.emit_image)
+                self.threads[i].namedict_signal.connect(self.threads_namedict)
+                self.threads[i].studyCollection_signal.connect(self.emit_studyCollection)
+                self.threads[i].start()
+            for i in range(self.num_threads):
+                self.threads[i].quit()
+                self.threads[i].wait()
+
+        except Exception as e:
+            print("error:", e)
+            pass
+
+    def emit_image(self, img):
+        """emit image as signal to main class"""
+        self.change_pixmap_signal.emit(img)
+
+    def threads_namedict(self, namedict):
+        try:
+            for name in self.name_lst:
+                if self.namedict[name][0] > int(namedict[name][0]):
+                    self.namedict[name][0] = int(namedict[name][0])
+                self.namedict[name][1] = self.namedict[name][1] + int(namedict[name][1])
+        except Exception as e:
+            print("namedict error:", e)
+            pass
+
+
+    def emit_studyCollection(self, studyCollection, time_slot, end_frame):
+        self.count = self.count + 1
+        for name in self.name_lst:
+            self.studyCollection[name] = self.studyCollection[name] + studyCollection[name]
+        if self.count == 6:
+            self.count = 0  # reset count
+            log_tmp = []  # people not recognized in list
+
+            for k in self.studyCollection.keys():
+                if self.studyCollection[k] == 0:
+                    log_tmp.append(k)
+                    log_tmp.append('\n')
+
+            fs = open('systemLog.txt', 'a')
+            num_frame = int(end_frame)
+            if log_tmp:  # if log_tmp is not empty
+                log_tmp.pop()  # remove the last \n
+                line = 'The following people have not be recognized from ' + str(num_frame // int(self.viewInfo.get('fps')) - int(self.num_threads)+1) + \
+                       's to ' + str(num_frame // int(self.viewInfo.get('fps'))) + 's:\n' + "".join(log_tmp)
+                self.log_queue.emit(line)
+                fs.write(line + '\n')
+            else:
+                line = 'all students can be recognized from ' + str((num_frame - self.time_slot) // int(self.viewInfo.get('fps'))* int(self.num_threads)) + \
+                       's to ' + str(num_frame // int(self.viewInfo.get('fps'))) + 's'
+                self.log_queue.emit(line)
+                fs.write(line + '\n')
+            fs.close()
+
+            for name in self.name_lst:
+                self.studyCollection[name] = 0
+
+    def write_feedback(self):
         f = open('feedback.txt', 'a')
-        for k, v in namedict.items():
-            line = str(k)+' first detected at '+str(namedict[k][0])+' frames,'+' total detect times: '+str(namedict[k][1])
+        for k, v in self.namedict.items():
+            if self.namedict[k][0] == sys.maxsize:
+                line = str(k) + ' has not recognized in this video'
+                f.write(line)
+                f.write('\n')
+                continue
+            line = str(k) + ' first detected at ' + str(
+                self.namedict[k][0]) + ' frames,' + ' total detect times: ' + str(self.namedict[k][1])
             f.write(line)
             f.write('\n')
 
-        for name in self.name_lst:
-            if name not in namedict:
-                line = name + ' has not recognized in this video'
-                f.write(line)
-                f.write('\n')
-
         f.close()
 
-    def recognize(self, frame, namedict, frameCounter, studyCollection, tmp_dict):
-        classes = self.name_lst
-        classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
 
-        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        row = self.viewInfo.get('Row')
-        column = self.viewInfo.get('Column')
-        clip_width = int(self.viewInfo.get('Width') / row)  # 256
-        clip_height = int(self.viewInfo.get('Height') / column)  # 144
-        fps = self.viewInfo.get('fps')
-        recognize_period = self.viewInfo.get('recognize_period')
-        study_period = self.viewInfo.get('study_period')
-        if frameCounter % int(fps * recognize_period) == 0:  # every recognize period reset tmp_dict
-            tmp_dict.clear()
-            print('clear tmp dict')
-        if frameCounter % int(fps * study_period) == 1:  # every study period reset
-            for k in studyCollection.keys():
-                studyCollection[k] = 0
+class TestProcessThread(QThread):
+    recognize_pixmap_signal = pyqtSignal(np.ndarray)
+    studyCollection_signal = pyqtSignal(dict, int, int)
+    namedict_signal = pyqtSignal(dict)
 
-        label = -1
+    def __init__(self, name_lst, viewInfo, net, frames_dict, time_slot, DEVICE, end_frame):
+        super().__init__()
+        self.name_lst = name_lst
+        self.viewInfo = viewInfo
+        self.net = net
+        self.frames_dict = frames_dict
+        self.time_slot = time_slot
+        self.DEVICE = DEVICE
+        self.end_frame = end_frame
+
+
+    def run(self):
         try:
-            for j in range(row):
-                for i in range(column):
-                    if (str(j), str(i)) in tmp_dict.keys():
-                        label = tmp_dict[str(j), str(i)]
-                        cv2.putText(frame, classes[label], (clip_width * j + 30, clip_height * i + 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
-                    else:
-                        cropped = grey[clip_height * i:clip_height * (i + 1),
-                                  clip_width * j:clip_width * (j + 1)]  # single cell
-                        # cv2.imshow("cropped", cropped)
-                        face_rects = classfier.detectMultiScale(cropped, scaleFactor=1.2, minNeighbors=3,
-                                                                minSize=(32, 32))
-                        # print('num of detected face: ', len(face_rects))
-                        # print([j, i])
-                        # cv2.waitKey(200)
-                        if len(face_rects) > 0:
-                            for face_rect in face_rects:
-                                x, y, w, h = face_rect
-                                image = cropped[y - 10:y + h + 10, x - 10:x + w + 10]
-                                # opencv to PIL: BGR2RGB
-                                PIL_image = self.cv2pil(image)
-                                if PIL_image is None:
-                                    continue
-                                # using model to recognize
-                                label = self.predict_model(PIL_image)
-                                if label != -1:
-                                    # print([j, i], classes[label])
-                                    # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
-                                    cv2.putText(frame, classes[label], (clip_width * j + 30, clip_height * i + 30),
-                                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
-                                    tmp_dict[(str(j), str(i))] = label
-                                else:
-                                    continue
+            tmp_dict = {}  # CNN already recognized name in one second
+            namedict = {}  # store the time of first recognition, and total recognition time
+            studyCollection = {}  # store the recognized time in a time slot
+            classes = self.name_lst
+            classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
+            row = self.viewInfo.get('Row')
+            column = self.viewInfo.get('Column')
+            clip_width = int(self.viewInfo.get('Width') / row)  # 256
+            clip_height = int(self.viewInfo.get('Height') / column)  # 144
+            fps = self.viewInfo.get('fps')
+            recognize_period = self.viewInfo.get('recognize_period')
+            study_period = self.viewInfo.get('study_period')
+            for name in self.name_lst:
+                studyCollection[name] = 0
+                namedict[name] = [sys.maxsize, 0]
 
-                    if label != -1:
-                        if namedict[classes[label]] == []:
-                            namedict[classes[label]].append(frameCounter)
-                            namedict[classes[label]].append(1)
-                        else:
-                            namedict[classes[label]][1] += 1
-                        # get the time of this student appear in a time slot
-                        studyCollection[classes[label]] += 1
-                        label = -1
+            for num_frame, frame in self.frames_dict.items():
+
+                grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if int(num_frame) % int(fps * recognize_period) == 1:  # every recognize period reset tmp_dict
+                    tmp_dict.clear()
+                    # print('clear tmp dict')
+                label = -1
+
+                try:
+                    for j in range(row):
+                        for i in range(column):
+                            if (str(j), str(i)) in tmp_dict.keys():
+                                label = tmp_dict[str(j), str(i)]
+                                cv2.putText(frame, classes[label], (clip_width * j + 30, clip_height * i + 30),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
+                            else:
+
+                                cropped = grey[clip_height * i:clip_height * (i + 1),
+                                          clip_width * j:clip_width * (j + 1)]  # single cell
+                                # cv2.imshow("cropped", cropped)
+                                face_rects = classfier.detectMultiScale(cropped, scaleFactor=1.2, minNeighbors=3,
+                                                                        minSize=(32, 32))
+
+                                # print([j, i])
+                                # cv2.waitKey(200)
+                                if len(face_rects) > 0:
+                                    for face_rect in face_rects:
+                                        x, y, w, h = face_rect
+                                        image = cropped[y - 10:y + h + 10, x - 10:x + w + 10]
+                                        # opencv to PIL: BGR2RGB
+                                        PIL_image = self.cv2pil(image)
+                                        if PIL_image is None:
+                                            continue
+                                        # using model to recognize
+                                        label = self.predict_model(PIL_image)
+                                        if label != -1:
+                                            # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
+                                            cv2.putText(frame, classes[label],
+                                                        (clip_width * j + 30, clip_height * i + 30),
+                                                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2,
+                                                        cv2.LINE_AA)  # label name
+                                            tmp_dict[(str(j), str(i))] = label
+                                        else:
+                                            continue
+
+                            if label != -1:
+                                if namedict[classes[label]][0] > int(num_frame):
+                                    namedict[classes[label]][0] = int(num_frame)
+                                namedict[classes[label]][1] += 1
+                                # get the time of this student appear in a time slot
+                                studyCollection[classes[label]] += 1
+                                label = -1
+                except Exception as e:
+                    print("frame number:", num_frame, e)
+                    pass
+
+
+                self.recognize_pixmap_signal.emit(frame)
+
+            self.namedict_signal.emit(namedict)
+            self. studyCollection_signal.emit(studyCollection, self.time_slot, self.end_frame)
+
+
         except Exception as e:
-            print("frame number:", frameCounter, e)
+            print("error:", e)
             pass
 
-        return frame, namedict, studyCollection, tmp_dict
 
     def cv2pil(self, image):
         if image.size != 0:
@@ -333,7 +437,6 @@ class VideoTestThread(QThread):
             return None
 
     def predict_model(self, image):
-
         data_transform = transforms.Compose([
             transforms.Resize((224, 224)),  # reszie image to 224*224
             transforms.CenterCrop(224),  # center crop 224*224
@@ -343,28 +446,28 @@ class VideoTestThread(QThread):
         image = image.view(-1, 3, 224, 224)
 
         output = self.net(image.to(self.DEVICE))
-        prob = F.softmax(output[0], dim=0).detach()
+        prob = softmax(output[0], dim=0).detach()
         idx = torch.argmax(prob).item()
         pred = output.max(1, keepdim=True)[1]
         if pred.item() != idx:
             print('no', pred.item())
-        # print('output:', F.softmax(output[0].cpu().detach().numpy(), dim=0))
+        # print('output:', softmax(output[0].cpu().detach().numpy(), dim=0))
         # print('output:', prob)
-        if prob[idx] > 0.98:
+        if prob[idx] > 0.98:  # alexNet:0.98,
             # print('output:', prob)
             return idx
         else:
             return -1
 
 
-class App(QWidget):
+class App(QWidget, Ui_faceRfecognition):
 
     receiveLogSignal = pyqtSignal(str)  # Log signal
 
     def __init__(self):
         super().__init__()
-
-        loadUi('./faceRecognition.ui', self)
+        self.setupUi(self)
+        # loadUi('./faceRecognition.ui', self)
 
         self.setWindowIcon(QIcon('./icon.png'))
         self.setFixedSize(1280, 656)
@@ -382,6 +485,9 @@ class App(QWidget):
         self.clipFormatButton.toggled.connect(self.addInputFormat)  # input view format
         self.isFinishClassify = False
         self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video and then training
+        # test training
+        # self.uploadVideoButton.clicked.connect(self.trainData)
+        
         self.isFinishTrain = False
         self.faceRecognitionButton.clicked.connect(self.faceRecognition)  # select test video
         self.isFinishTest = False
@@ -401,7 +507,7 @@ class App(QWidget):
         self.viewInfo = {'Row': '', 'Column': '', 'Width': '', 'Height': '', 'ocr_period': '', 'recognize_period': '', 'study_period': '', 'fps': ''}
 
         # read config file
-        self.config = configparser.ConfigParser()
+        self.config = ConfigParser()
         self.config.read('config.ini', encoding='utf-8-sig')
         self.viewInfo['Row'] = self.config.getint('viewInfo', 'Row')
         self.viewInfo['Column'] = self.config.getint('viewInfo', 'Column')
@@ -410,10 +516,11 @@ class App(QWidget):
         self.viewInfo['study_period'] = self.config.getint('period', 'study_period')
 
 
-        # self.dataset = 'marked_image_5min'
-        # self.net_path = 'net_params_5min_alexnet_gpu.pth'
-        # self.name_lst = ['AnboWANG', 'BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'JiahuangCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
-        # self.faceRecognitionButton.setEnabled(True)
+        self.dataset = 'marked_image_5min'
+        self.net_path = 'net_params_5min_alexnet.pth'
+        self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'QingboLI', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TONGHiuYan', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
+        self.faceRecognitionButton.setEnabled(True)
+        # self.uploadVideoButton.setEnabled(True)
         # self.uploadRosterButton.toggled.connect(self.trainData)
 
 
@@ -460,7 +567,7 @@ class App(QWidget):
             # get user input
             self.viewInfo['Row'] = int(self.formatDialog.rowLineEdit.text().strip())
             self.viewInfo['Column'] = int(self.formatDialog.columnLineEdit.text().strip())
-            self.logQueue.put('Success：Add view format')
+            self.logQueue.put('Success: Add view format')
             self.isFinishFormat = True
             print('view format: ', self.viewInfo)
             self.formatDialog.close()
@@ -468,8 +575,7 @@ class App(QWidget):
             self.uploadVideoButton.setEnabled(True)
 
     def uploadVideo(self):
-        # capture from web cam
-        # path = self.video
+        # get video path
         self.chooseVideo()
         if len(self.video)>0:
             self.uploadVideoButton.setEnabled(False)
@@ -484,7 +590,7 @@ class App(QWidget):
 
         # remove historical folder
         if os.path.exists(self.dataset):
-            shutil.rmtree(self.dataset)
+            rmtree(self.dataset)
         # establish newly personal folder
         if not os.path.exists(self.dataset):
             os.makedirs(self.dataset)
@@ -517,6 +623,7 @@ class App(QWidget):
         #     self.faceRecognitionButton.setEnabled(True)
 
         # method2:
+        return
         self.thread = VideoTrainThread(self.dataset)
         self.thread.train_successful_signal.connect(self.successful_train)
         self.thread.start()
@@ -529,7 +636,7 @@ class App(QWidget):
         #
         # if len(os.listdir(self.dataset)) < 10:
         #     self.uploadVideoButton.setEnabled(True)
-        #     shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
+        #     rmtree(self.dataset)  # remove the dataset which contain too small classes
         #     self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
         #     self.dataset = None
         #     return
@@ -560,7 +667,8 @@ class App(QWidget):
         self.thread.log_queue.connect(self.send_message)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
-        self.thread.finished.connect(self.enableDrawButton)
+        self.thread.test_finish_signal.connect(self.successful_test)
+        # self.thread.finished.connect(self.successful_test)
         self.thread.start()
 
         # self.cap = cv2.VideoCapture(self.video)
@@ -568,8 +676,7 @@ class App(QWidget):
         # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         # fps = self.cap.get(5)  # get the video fps
         # self.num_frame = 1
-    def enableDrawButton(self):
-        self.drawButton.setEnabled(True)
+
     def plot(self):
         feedback_name = 'feedback.txt'
         log_name = 'systemLog.txt'
@@ -640,7 +747,7 @@ class App(QWidget):
     def successful_classify(self, switch):
         if switch == -1:
             self.uploadVideoButton.setEnabled(True)
-            shutil.rmtree(self.dataset)  # remove the dataset which contain too small classes
+            rmtree(self.dataset)  # remove the dataset which contain too small classes
             self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
             self.dataset = None
         elif switch == 1:
@@ -655,11 +762,17 @@ class App(QWidget):
             self.isFinishTrain = True
             self.faceRecognitionButton.setEnabled(True)
 
+    def successful_test(self, switch):
+        if switch == 1:
+            self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
+            self.drawButton.setEnabled(True)
 
-class formatDialog(QDialog):
+
+class formatDialog(QDialog, Ui_format):
     def __init__(self):
         super(formatDialog, self).__init__()
-        loadUi('./format.ui', self)
+        self.setupUi(self)
+        # loadUi('./format.ui', self)
         self.setFixedSize(512, 248)
 
         # restrict the input
@@ -679,6 +792,8 @@ def trainProcess(dataset, return_dict):
     print(time)
 
 if __name__=="__main__":
+    if getattr(sys, 'frozen', False):
+        os.environ['JOBLIB_MULTIPROCESSING'] = '0'  # for prevent exe keep opening itself
     app = QApplication(sys.argv)
     a = App()
     a.show()
