@@ -221,7 +221,7 @@ def loadtraindata(path):
             transforms.CenterCrop((250, 250)),
             transforms.RandomCrop((200, 200)),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]),
         'test': transforms.Compose([
             transforms.Resize((200, 200)),
@@ -247,34 +247,32 @@ def loadtraindata(path):
     np.random.shuffle(dataset_indices)
     val_split_index = int(np.floor(0.7 * dataset_size))  # train 70%, val 20%, test 10%
     test_split_index = int(np.floor(0.9 * dataset_size))
-    train_idx, val_idx, test_idx = dataset_indices[:val_split_index], dataset_indices[
-                                                                      val_split_index:test_split_index], dataset_indices[
-                                                                                                         test_split_index:]
+    train_idx, val_idx, test_idx = dataset_indices[:val_split_index], dataset_indices[val_split_index:test_split_index], dataset_indices[test_split_index:]
     print('len: ', len(train_idx), len(val_idx), len(test_idx))
     train_sampler = SubsetRandomSampler(train_idx)
     val_sampler = SubsetRandomSampler(val_idx)
     test_sampler = SubsetRandomSampler(test_idx)
     # batch_size: number of iteration in each time
     # when use SubsetRandomSampler cannot use shuffle, shuffle: whether random sort in each time
-    train_loader = DataLoader(dataset=dataset, batch_size=20, shuffle=False, sampler=train_sampler, num_workers=8,
-                              pin_memory=True)
-    val_loader = DataLoader(dataset=dataset, batch_size=20, shuffle=False, sampler=val_sampler, num_workers=8,
-                            pin_memory=True)
-    # test_loader = DataLoader(dataset=dataset, batch_size=20, shuffle=False, sampler=test_sampler, num_workers=8, pin_memory=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=20, shuffle=False, sampler=train_sampler, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(dataset=dataset, batch_size=20, shuffle=False, sampler=val_sampler, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(dataset=dataset, batch_size=20, shuffle=False, sampler=test_sampler, num_workers=8, pin_memory=True)
 
-    # use new test dataset to test model accuracy
-    test_dataset = 'dataset_test'
-    test_dataset = datasets.ImageFolder(test_dataset, transform=image_transforms['test'])
-    dataset_size = len(test_dataset)
-    dataset_indices = list(range(dataset_size))
-    np.random.shuffle(dataset_indices)
-    test_split_index = int(np.floor(0.1 * dataset_size))
-    test_idx = dataset_indices[:test_split_index]
-    test_sampler = SubsetRandomSampler(test_idx)
-    idx2class_test = {v: k for k, v in test_dataset.class_to_idx.items()}
-    test_loader = DataLoader(dataset=test_dataset, batch_size=20, shuffle=False, sampler=test_sampler, num_workers=8,
-                             pin_memory=True)
-    # test_loader = DataLoader(dataset=test_dataset, batch_size=64, shuffle=True, num_workers=8, pin_memory=True)
+
+    '''
+    use new test dataset to test model accuracy, need to delete finally
+    '''
+    # test_dataset = 'dataset_test'
+    # test_dataset = datasets.ImageFolder(test_dataset, transform=image_transforms['test'])
+    # dataset_size = len(test_dataset)
+    # dataset_indices = list(range(dataset_size))
+    # np.random.shuffle(dataset_indices)
+    # test_split_index = int(np.floor(0.1 * dataset_size))
+    # test_idx = dataset_indices[:test_split_index]
+    # test_sampler = SubsetRandomSampler(test_idx)
+    # idx2class_test = {v: k for k, v in test_dataset.class_to_idx.items()}
+    # test_loader = DataLoader(dataset=test_dataset, batch_size=20, shuffle=False, sampler=test_sampler, num_workers=8, pin_memory=True)
+    
 
     print('len of training set: ', len(train_loader), train_loader)
     print('len of validation set: ', len(val_loader), val_loader)
@@ -381,8 +379,9 @@ class Net(nn.Module):  # define net, which extends torch.nn.Module
         return x
 
 
-def trainandsave(path):
+def trainandsave(path, epoches):
     train_loader, validate_loader, test_loader, filename, classes, idx2class = loadtraindata(path)
+   
 
     # myNet
     # net = Net(len(classes))
@@ -400,8 +399,8 @@ def trainandsave(path):
     # net.fc = nn.Linear(512 * models.resnet.BasicBlock.expansion, len(classes))
 
     # resNet50
-    # net = models.resnet50(pretrained=True, )
-    # net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
+    net = models.resnet50(pretrained=True, )
+    net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
 
     # resnet152
     # net = models.resnet152(pretrained=True, )
@@ -421,13 +420,14 @@ def trainandsave(path):
 
     # mobilenet_v3
     # net = models.mobilenet_v3_small(pretrained=False, num_classes=len(classes), )
-    net = models.mobilenet_v3_small(pretrained=True, )
-    net.classifier = nn.Sequential(
-        nn.Linear(576, 1024),
-        nn.Hardswish(inplace=True),
-        nn.Dropout(p=0.2, inplace=True),
-        nn.Linear(1024, len(classes)),
-    )
+
+    # net = models.mobilenet_v3_small(pretrained=True, )
+    # net.classifier = nn.Sequential(
+    #     nn.Linear(576, 1024),
+    #     nn.Hardswish(inplace=True),
+    #     nn.Dropout(p=0.2, inplace=True),
+    #     nn.Linear(1024, len(classes)),
+    # )
 
     # squeezenet1_1
     # net = models.squeezenet1_1(pretrained=True, )
@@ -444,7 +444,7 @@ def trainandsave(path):
     # print(memory_summary)
     # print(torch.cuda.memory_stats(device='cuda'))
 
-    for epoch in range(10):  # 5 epoch
+    for epoch in range(epoches):  # 10 epoch
         # each epoch train all images, so total train 5 times
         # writer = SummaryWriter('runs/iExam_20220127_0905')
         # train_loss, train_accuracy,scaler = train(train_loader, net, criterion, optimizer, epoch, scaler, writer)
@@ -472,10 +472,6 @@ def trainandsave(path):
         textfile.write(string + ']\n')
         textfile.close()
 
-        # print('epoch: ', epoch, 'train loss:', train_loss)
-        # print('epoch: ', epoch, 'train accuracy:', train_accuracy)
-        # print('epoch: ', epoch, 'val loss:', val_loss)
-        # print('epoch: ', epuioch, 'val accuracy:', val_accuracy)
 
     print('Finished Training')
     test_accuracy = test(test_loader, net, idx2class)
@@ -488,16 +484,16 @@ def trainandsave(path):
     textfile.close()
     # save net
     # torch.save(net, 'net_'+filename+'.pkl')  # save structure and parameter
-    torch.save(net.state_dict(),
-               'net_params_resnet1529_amp_Pretrain_10epoch_20220201_' + filename + '.pth')  # only save parameter
+    file_name = 'net_params_resnet50_Pretrain_10epoch_20220501_' + filename + '.pth'
+    torch.save(net.state_dict(), file_name)  # only save parameter
 
-    return 'net_params_' + filename + '.pth', classes
+    return file_name, classes, net
 
 
 if __name__ == '__main__':
     path = 'marked_image_5min'
     before = time.asctime(time.localtime(time.time()))
     print(before)
-    trainandsave(path)
+    trainandsave(path, epoches=10)
     after = time.asctime(time.localtime(time.time()))
     print(after)

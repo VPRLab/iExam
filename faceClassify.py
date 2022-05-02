@@ -7,8 +7,8 @@ import pandas as pd
 
 
 def catchFaceAndClassify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict):
-    base_img, tmp_dict = opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
-    # base_img, tmp_dict = opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
+    # base_img, tmp_dict = opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
+    base_img, tmp_dict = opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
 
     return base_img, tmp_dict
 
@@ -40,7 +40,7 @@ def opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
             if tmp_row!=face_row or tmp_col!=face_col:  # avoid capture error
                 continue
             if (str(face_row), str(face_col)) in tmp_dict.keys():
-                historical_name = tmp_dict[str(face_row), str(face_col)]
+                historical_name = tmp_dict[(str(face_row), str(face_col))]
                 clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
                 if clip_img.size != 0:
                     cv2.imwrite(dataset + '/' + historical_name + '/{0}.jpg'.format(num_frame), clip_img)
@@ -129,8 +129,7 @@ def opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
     detector.setInput(imageBlob)
     detections = detector.forward()
 
-    detections_df = pd.DataFrame(detections[0][0],
-                                 columns=["img_id", "is_face", "confidence", "left", "top", "right", "bottom"])
+    detections_df = pd.DataFrame(detections[0][0], columns=["img_id", "is_face", "confidence", "left", "top", "right", "bottom"])
     detections_df = detections_df[detections_df['is_face'] == 1]  # 0: background, 1: face
     # print(detections_df.head())
     detections_df = detections_df[detections_df['confidence'] >= 0.15]
@@ -151,16 +150,13 @@ def opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
         # detected_face = base_img[int(top*aspect_ratio_y):int(bottom*aspect_ratio_y), int(left*aspect_ratio_x):int(right*aspect_ratio_x)]
 
         if detected_face.shape[0] > 0 and detected_face.shape[1] > 0:
-
-            # plt.figure(figsize = (3, 3))
-
             # low resolution
             # cv2.putText(image, confidence_score, (left, top-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             # cv2.rectangle(image, (left, top), (right, bottom), (255, 255, 255), 1) #draw rectangle to main image
 
             # high resolution
-            cv2.putText(base_img, confidence_score, (int(left * aspect_ratio_x), int(top * aspect_ratio_y - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)),(int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (255, 255, 255),1)  # draw rectangle to main image
+            # cv2.putText(base_img, confidence_score, (int(left * aspect_ratio_x), int(top * aspect_ratio_y - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            # cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)),(int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (255, 255, 255),1)  # draw rectangle to main image
 
             # -------------------
             face_row = int(int(left * aspect_ratio_x) / clip_width)
