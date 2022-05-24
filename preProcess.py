@@ -1,10 +1,8 @@
 import os
 import shutil
 import difflib
-import cv2
 
 def OCRprocessing(dataset, name_lst):
-    # dataset = 'marked_image_30minCopy'
     dirs = os.listdir(dataset)
     print('classes number in dataset:', len(dirs))
     print('classes:', dirs)

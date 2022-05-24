@@ -15,25 +15,19 @@ import os
 import faceClassify  # test face in one frame
 import torchTrain  # train by torch
 import preProcess  # OCR post-processing
-
 import evaluation  # draw graph
 from shutil import rmtree
-from collections import defaultdict
 import numpy as np
+import pandas as pd
 from configparser import ConfigParser
-# from multiprocessing import Process
-# import faceClassify_test
 from PIL import Image
 import torchvision.transforms as transforms
-import torch.nn as nn
 from torch.nn.functional import softmax
-from torchvision import models
 import torch
-
-# import OCR_evaluation
-
+from tqdm import tqdm
 from ui_faceRecognition import Ui_faceRfecognition
 from ui_format import Ui_format
+
 
 
 class ProcessThread(QThread):
@@ -46,17 +40,12 @@ class ProcessThread(QThread):
         self.viewInfo = viewInfo
         self.frames_dict = frames_dict
 
-        # self.dataset = 'OCR_evaluation'
-
-
     def run(self):
         try:
             tmp_dict = {}  # OCR already recognized name in one second
             for num_frame, frame in self.frames_dict.items():
                 image, tmp_dict = faceClassify.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
-                # image, tmp_dict = OCR_evaluation.catchFaceAndClassify(self.dataset, self.name_lst, frame, num_frame, self.viewInfo, tmp_dict)
                 self.process_pixmap_signal.emit(image)
-            # print('tmp_dict:', tmp_dict)
         except Exception as e:
             print("error:", e)
             pass
@@ -81,6 +70,7 @@ class VideoClassifyThread(QThread):
         num_threads = 6
         frames_lst = []  # frames_lst=[{}, {}, {}]
         self.viewInfo['fps'] = int(cap.get(5))
+        stream = tqdm(total=int(cap.get(7)))
         print('num threads:', num_threads)
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
@@ -88,21 +78,21 @@ class VideoClassifyThread(QThread):
             frames_lst.append({})
         while True:
             ret, cv_img = cap.read()
+            # print('the number of captured frame: ', num_frame)
+            stream.update(1)
+            stream.set_description('Classify Process')
             if ret:
                 try:
-                    print('the number of captured frame: ', num_frame)
                     for i in range(num_threads):
                         if num_frame % num_threads == i:
                             frames_lst[i][str(num_frame)] = cv_img
                     if num_frame % (self.viewInfo['fps'] * self.viewInfo['ocr_period'] * num_threads) == 0:
-                        print(len(frames_lst[0]))
+                        # print(len(frames_lst[0]))
                         self.multithread_classify(frames_lst)
                         frames_lst.clear()
                         for i in range(num_threads):
                             frames_lst.append({})
 
-                        time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-                        print(time)
                 except Exception as e:
                     print("error:", e)
                     pass
@@ -112,6 +102,7 @@ class VideoClassifyThread(QThread):
                 break
             num_frame += 1
             # cv2.waitKey(1)
+        stream.close()
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
 
@@ -154,18 +145,18 @@ class VideoTrainThread(QThread):
     def run(self):
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
-        net_path, name_lst = torchTrain.trainandsave(self.dataset)
+        net_path, name_lst, net = torchTrain.trainandsave(self.dataset, epoches=10)
         print(net_path)
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
-        info_dict = {'net_path': net_path, 'name_lst': name_lst}
+        info_dict = {'net_path': net_path, 'name_lst': name_lst, 'net': net}
         self.train_successful_signal.emit(info_dict)
 
 class VideoTestThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     log_queue = pyqtSignal(str)
     test_finish_signal = pyqtSignal(int)
-    def __init__(self, video_path, name_lst, net_path, viewInfo):
+    def __init__(self, video_path, name_lst, net_path, viewInfo, net):
         super().__init__()
         self.video = video_path
         self.name_lst = name_lst
@@ -176,30 +167,14 @@ class VideoTestThread(QThread):
         self.namedict = {}
         self.num_threads = 6
         self.count = 0  # for combine all thread study records
-        # alexNet:
-        self.net = models.alexnet(pretrained=True)
-        self.net.classifier = nn.Sequential(
-            nn.Dropout(),
-            nn.Linear(256 * 6 * 6, 4096),
-            nn.ReLU(inplace=True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            nn.Linear(4096, len(name_lst)),
-        )
-        # googleNet:
-        # self.net = models.googlenet(pretrained=True)
-        # self.net.fc = nn.Linear(1024, len(name_lst))
-
-        # resNet18
-        # self.net = models.resnet18(pretrained=True)
-        # self.net.fc = nn.Linear(512, len(name_lst))
-
+        self.net = net
         self.DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.net.to(self.DEVICE)
+
         # load net
         self.net.load_state_dict(torch.load(self.net_path))
         # self.net.load_state_dict(torch.load(self.net_path, map_location='cpu'))
+        self.net.to(self.DEVICE)
+        self.net.eval()
 
     def run(self):
         cap = cv2.VideoCapture(self.video)
@@ -211,6 +186,7 @@ class VideoTestThread(QThread):
         # for multiprocessing
         frames_lst = [{} for i in range(self.num_threads)]  # frames_lst=[{}, {}, {}]
         num_frame = 1
+        stream = tqdm(total=int(cap.get(7)))
         for name in self.name_lst:
             self.studyCollection[name] = 0
             self.namedict[name] = [sys.maxsize, 0]   # a large number for after replace
@@ -219,7 +195,9 @@ class VideoTestThread(QThread):
         print(time)
         while True:
             ret, cv_img = cap.read()  # read one frame
-            print('the number of captured frame: ', num_frame)
+            # print('the number of captured frame: ', num_frame)
+            stream.update(1)
+            stream.set_description('Test Process')
 
             if ret:
                 for i in range(self.num_threads):
@@ -230,18 +208,18 @@ class VideoTestThread(QThread):
                     self.multithread_test(frames_lst, time_slot, num_frame)
                     frames_lst.clear()
                     for i in range(self.num_threads):
-                        frames_lst.append({})
+                        frames_lst.append({})  # reset
 
                     time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
                     print(time)
 
             else:
-                # self.multithread_test(frames_lst, time_slot, num_frame)  # if frames_lst store some images, but not full will discard
                 cap.release()
                 break
 
             num_frame += 1
             cv2.waitKey(1)
+        stream.close()
         self.write_feedback()
         time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
         print(time)
@@ -250,10 +228,10 @@ class VideoTestThread(QThread):
         return
 
 
-    def multithread_test(self, frames_lst, time_slot, end_frame):
+    def multithread_test(self, frames_lst, time_slot, end_frame_num):
         try:
             for i in range(self.num_threads):
-                self.threads[i] = TestProcessThread(self.name_lst, self.viewInfo, self.net, frames_lst[i], time_slot, self.DEVICE, end_frame)
+                self.threads[i] = TestProcessThread(self.name_lst, self.viewInfo, self.net, frames_lst[i], time_slot, self.DEVICE, end_frame_num)
                 self.threads[i].recognize_pixmap_signal.connect(self.emit_image)
                 self.threads[i].namedict_signal.connect(self.threads_namedict)
                 self.threads[i].studyCollection_signal.connect(self.emit_studyCollection)
@@ -280,7 +258,6 @@ class VideoTestThread(QThread):
             print("namedict error:", e)
             pass
 
-
     def emit_studyCollection(self, studyCollection, time_slot, end_frame):
         self.count = self.count + 1
         for name in self.name_lst:
@@ -303,7 +280,7 @@ class VideoTestThread(QThread):
                 self.log_queue.emit(line)
                 fs.write(line + '\n')
             else:
-                line = 'all students can be recognized from ' + str((num_frame - self.time_slot) // int(self.viewInfo.get('fps'))* int(self.num_threads)) + \
+                line = 'all students can be recognized from ' + str((num_frame - time_slot) // int(self.viewInfo.get('fps'))* int(self.num_threads)) + \
                        's to ' + str(num_frame // int(self.viewInfo.get('fps'))) + 's'
                 self.log_queue.emit(line)
                 fs.write(line + '\n')
@@ -333,7 +310,7 @@ class TestProcessThread(QThread):
     studyCollection_signal = pyqtSignal(dict, int, int)
     namedict_signal = pyqtSignal(dict)
 
-    def __init__(self, name_lst, viewInfo, net, frames_dict, time_slot, DEVICE, end_frame):
+    def __init__(self, name_lst, viewInfo, net, frames_dict, time_slot, DEVICE, end_frame_num):
         super().__init__()
         self.name_lst = name_lst
         self.viewInfo = viewInfo
@@ -341,94 +318,179 @@ class TestProcessThread(QThread):
         self.frames_dict = frames_dict
         self.time_slot = time_slot
         self.DEVICE = DEVICE
-        self.end_frame = end_frame
+        self.end_frame_num = end_frame_num
 
 
     def run(self):
         try:
-            tmp_dict = {}  # CNN already recognized name in one second
-            namedict = {}  # store the time of first recognition, and total recognition time
-            studyCollection = {}  # store the recognized time in a time slot
-            classes = self.name_lst
-            classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
-            row = self.viewInfo.get('Row')
-            column = self.viewInfo.get('Column')
-            clip_width = int(self.viewInfo.get('Width') / row)  # 256
-            clip_height = int(self.viewInfo.get('Height') / column)  # 144
-            fps = self.viewInfo.get('fps')
-            recognize_period = self.viewInfo.get('recognize_period')
-            study_period = self.viewInfo.get('study_period')
-            for name in self.name_lst:
-                studyCollection[name] = 0
-                namedict[name] = [sys.maxsize, 0]
-
-            for num_frame, frame in self.frames_dict.items():
-
-                grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                if int(num_frame) % int(fps * recognize_period) == 1:  # every recognize period reset tmp_dict
-                    tmp_dict.clear()
-                    # print('clear tmp dict')
-                label = -1
-
-                try:
-                    for j in range(row):
-                        for i in range(column):
-                            if (str(j), str(i)) in tmp_dict.keys():
-                                label = tmp_dict[str(j), str(i)]
-                                cv2.putText(frame, classes[label], (clip_width * j + 30, clip_height * i + 30),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)  # label name
-                            else:
-
-                                cropped = grey[clip_height * i:clip_height * (i + 1),
-                                          clip_width * j:clip_width * (j + 1)]  # single cell
-                                # cv2.imshow("cropped", cropped)
-                                face_rects = classfier.detectMultiScale(cropped, scaleFactor=1.2, minNeighbors=3,
-                                                                        minSize=(32, 32))
-
-                                # print([j, i])
-                                # cv2.waitKey(200)
-                                if len(face_rects) > 0:
-                                    for face_rect in face_rects:
-                                        x, y, w, h = face_rect
-                                        image = cropped[y - 10:y + h + 10, x - 10:x + w + 10]
-                                        # opencv to PIL: BGR2RGB
-                                        PIL_image = self.cv2pil(image)
-                                        if PIL_image is None:
-                                            continue
-                                        # using model to recognize
-                                        label = self.predict_model(PIL_image)
-                                        if label != -1:
-                                            # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)
-                                            cv2.putText(frame, classes[label],
-                                                        (clip_width * j + 30, clip_height * i + 30),
-                                                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2,
-                                                        cv2.LINE_AA)  # label name
-                                            tmp_dict[(str(j), str(i))] = label
-                                        else:
-                                            continue
-
-                            if label != -1:
-                                if namedict[classes[label]][0] > int(num_frame):
-                                    namedict[classes[label]][0] = int(num_frame)
-                                namedict[classes[label]][1] += 1
-                                # get the time of this student appear in a time slot
-                                studyCollection[classes[label]] += 1
-                                label = -1
-                except Exception as e:
-                    print("frame number:", num_frame, e)
-                    pass
-
-
-                self.recognize_pixmap_signal.emit(frame)
-
-            self.namedict_signal.emit(namedict)
-            self. studyCollection_signal.emit(studyCollection, self.time_slot, self.end_frame)
-
+            # two methods for get face
+           # self.haar_recognition()
+           self.dnn_recognition()
 
         except Exception as e:
             print("error:", e)
             pass
 
+    def haar_recognition(self):
+        tmp_dict = {}  # CNN already recognized name in one second
+        namedict = {}  # store the time of first recognition, and total recognition time
+        studyCollection = {}  # store the recognized time in a time slot
+
+        classes = self.name_lst
+        classfier = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml')
+        row = self.viewInfo.get('Row')
+        column = self.viewInfo.get('Column')
+        clip_width = int(self.viewInfo.get('Width') / row)  # 256
+        clip_height = int(self.viewInfo.get('Height') / column)  # 144
+        fps = self.viewInfo.get('fps')
+        recognize_period = self.viewInfo.get('recognize_period')
+        for name in self.name_lst:
+            studyCollection[name] = 0
+            namedict[name] = [sys.maxsize, 0]
+
+        for num_frame, frame in self.frames_dict.items():
+
+            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if int(num_frame) % int(fps * recognize_period) == 1:  # every recognize period reset tmp_dict
+                tmp_dict.clear()
+                # print('clear tmp dict')
+
+            face_rects = classfier.detectMultiScale(frame, scaleFactor=1.1, minNeighbors=5, minSize=(8, 8))
+            if len(face_rects) > 0:
+                for face_rect in face_rects:
+                    x, y, w, h = face_rect
+                    face_row = int(x / clip_width)
+                    face_col = int(y / clip_height)
+                    if w > clip_width or h > clip_height:  # avoid capture error
+                        continue
+                    tmp_row = int((x + w) / clip_width)
+                    tmp_col = int((y + h) / clip_height)
+                    if tmp_row != face_row or tmp_col != face_col:  # avoid capture error
+                        continue
+
+                    label = -1  # initialize label, avoid use last one
+                    if (str(face_row), str(face_col)) in tmp_dict.keys():
+                        label = tmp_dict[(str(face_row), str(face_col))]
+                        cv2.putText(frame, classes[label], (clip_width*face_row+30, clip_height*face_col+30),cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)  # label name
+                    else:
+                        image = grey[y - 10:y + h + 10, x - 10:x + w + 10]
+                        # opencv to PIL: BGR2RGB
+                        PIL_image = self.cv2pil(image)
+                        if PIL_image is None:
+                            continue
+                        # using model to recognize
+                        label = self.predict_model(PIL_image)
+                        if label != -1:
+                            # cv2.rectangle(frame, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 0, 255), 1)    # draw rectangle
+                            cv2.putText(frame, classes[label], (clip_width*face_row+30, clip_height*face_col+30),cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)  # label name
+                            tmp_dict[(str(face_row), str(face_col))] = label
+                        else:
+                            continue
+                        if label != -1:
+                            if namedict[classes[label]][0] > int(num_frame):
+                                namedict[classes[label]][0] = int(num_frame)
+                            namedict[classes[label]][1] += 1
+                            # get the time of this student appear in a time slot
+                            studyCollection[classes[label]] += 1
+
+            self.recognize_pixmap_signal.emit(frame)
+
+        self.namedict_signal.emit(namedict)
+        self.studyCollection_signal.emit(studyCollection, self.time_slot, self.end_frame_num)
+
+    def dnn_recognition(self):
+        tmp_dict = {}  # CNN already recognized name in one second
+        namedict = {}  # store the time of first recognition, and total recognition time
+        studyCollection = {}  # store the recognized time in a time slot
+
+        classes = self.name_lst
+        detector = cv2.dnn.readNetFromCaffe("deploy.prototxt.txt", "res10_300x300_ssd_iter_140000.caffemodel")
+        row = self.viewInfo.get('Row')
+        column = self.viewInfo.get('Column')
+        clip_width = int(self.viewInfo.get('Width') / row)  # 256
+        clip_height = int(self.viewInfo.get('Height') / column)  # 144
+        fps = self.viewInfo.get('fps')
+        recognize_period = self.viewInfo.get('recognize_period')
+
+        for name in self.name_lst:
+            studyCollection[name] = 0
+            namedict[name] = [sys.maxsize, 0]
+
+        for num_frame, frame in self.frames_dict.items():
+
+            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if int(num_frame) % int(fps * recognize_period) == 1:  # every recognize period reset tmp_dict
+                tmp_dict.clear()
+                # print('clear tmp dict')
+
+            base_img = frame.copy()
+            original_size = frame.shape
+            target_size = (300, 300)
+            image = cv2.resize(frame, target_size)
+            aspect_ratio_x = (original_size[1] / target_size[1])
+            aspect_ratio_y = (original_size[0] / target_size[0])
+            imageBlob = cv2.dnn.blobFromImage(image=image)
+            detector.setInput(imageBlob)
+            detections = detector.forward()
+            detections_df = pd.DataFrame(detections[0][0], columns=["img_id", "is_face", "confidence", "left", "top", "right", "bottom"])
+            detections_df = detections_df[detections_df['is_face'] == 1]  # 0: background, 1: face
+            detections_df = detections_df[detections_df['confidence'] >= 0.15]
+
+            try:
+                for i, instance in detections_df.iterrows():
+                    # print(instance)
+                    left = int(instance["left"] * 300)
+                    bottom = int(instance["bottom"] * 300)
+                    right = int(instance["right"] * 300)
+                    top = int(instance["top"] * 300)
+
+                    detected_face = image[top:bottom, left:right]
+                    predict_face = base_img[(int(top * aspect_ratio_y)):(int(bottom * aspect_ratio_y)), (int(left * aspect_ratio_x)):(int(right * aspect_ratio_x))]  # need to change grey -> base_img
+
+                    if detected_face.shape[0] > 0 and detected_face.shape[1] > 0:
+                        face_row = int(int(left * aspect_ratio_x) / clip_width)
+                        face_col = int(int(top * aspect_ratio_y) / clip_height)
+                        if ((bottom - top) * aspect_ratio_y) > clip_width or ((right - left) * aspect_ratio_x) > clip_height:  # avoid capture error
+                            continue
+                        tmp_row = int(int(right * aspect_ratio_x) / clip_width)
+                        tmp_col = int(int(bottom * aspect_ratio_y) / clip_height)
+                        if tmp_row != face_row or tmp_col != face_col:  # avoid capture error
+                            continue
+
+                        if (str(face_row), str(face_col)) in tmp_dict.keys():
+                            historical_name = tmp_dict[(str(face_row), str(face_col))]
+                            cv2.putText(base_img, historical_name,(int(clip_width*face_row+30), int(clip_height*face_col+30)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                            # cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)), (int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (255, 255, 255), 2)  # draw rectangle to main image
+                        else:
+                            predict_image = cv2.cvtColor(detected_face, cv2.COLOR_BGR2GRAY)
+                            # opencv to PIL: BGR2RGB
+                            PIL_image = self.cv2pil(predict_face)
+                            if PIL_image is None:
+                                continue
+                            # using model to recognize
+                            label = -1  # initialize label, avoid use last one
+                            label = self.predict_model(PIL_image)  # label is idx to name in classes
+                            # print('label is: ', label, classes[label])
+                            if label != -1:
+                                cv2.putText(base_img, classes[label], (int(clip_width*face_row+30), int(clip_height*face_col+30)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)  # label name
+                                # cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)), (int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (0, 0, 255), 1)  # draw rectangle
+                                tmp_dict[(str(face_row), str(face_col))] = classes[label]
+                                if namedict[classes[label]][0] > int(num_frame):
+                                    namedict[classes[label]][0] = int(num_frame)
+                                namedict[classes[label]][1] += 1
+                                # get the time of this student appear in a time slot
+                                studyCollection[classes[label]] += 1
+                            else:
+                                continue
+
+            except Exception as e:
+                print("frame number:", num_frame, e)
+                pass
+
+            self.recognize_pixmap_signal.emit(base_img)
+
+        self.namedict_signal.emit(namedict)
+        self.studyCollection_signal.emit(studyCollection, self.time_slot, self.end_frame_num)
 
     def cv2pil(self, image):
         if image.size != 0:
@@ -439,22 +501,21 @@ class TestProcessThread(QThread):
     def predict_model(self, image):
         data_transform = transforms.Compose([
             transforms.Resize((224, 224)),  # reszie image to 224*224
-            transforms.CenterCrop(224),  # center crop 224*224
-            transforms.ToTensor()  # each pixel to tensor
+            transforms.ToTensor(),  # each pixel to tensor
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
+        # image.show()
         image = data_transform(image)  # change PIL image to tensor
-        image = image.view(-1, 3, 224, 224)
+        image = image.view(-1, 3, 224, 224)  # change 3-dimensional to 4-dimensional for input
 
         output = self.net(image.to(self.DEVICE))
         prob = softmax(output[0], dim=0).detach()
         idx = torch.argmax(prob).item()
-        pred = output.max(1, keepdim=True)[1]
-        if pred.item() != idx:
-            print('no', pred.item())
-        # print('output:', softmax(output[0].cpu().detach().numpy(), dim=0))
-        # print('output:', prob)
-        if prob[idx] > 0.98:  # alexNet:0.98,
-            # print('output:', prob)
+        # pred = output.max(1, keepdim=True)[1]
+        # if pred.item() != idx:
+        #     print('no', pred.item())
+        # print('output:', prob, 'idx:', idx)
+        if prob[idx] > 0.5:  # alexNet:0.98, resnet50:0.05
             return idx
         else:
             return -1
@@ -485,9 +546,6 @@ class App(QWidget, Ui_faceRfecognition):
         self.clipFormatButton.toggled.connect(self.addInputFormat)  # input view format
         self.isFinishClassify = False
         self.uploadVideoButton.clicked.connect(self.uploadVideo)  # get face data by video and then training
-        # test training
-        # self.uploadVideoButton.clicked.connect(self.trainData)
-        
         self.isFinishTrain = False
         self.faceRecognitionButton.clicked.connect(self.faceRecognition)  # select test video
         self.isFinishTest = False
@@ -515,30 +573,16 @@ class App(QWidget, Ui_faceRfecognition):
         self.viewInfo['recognize_period'] = self.config.getint('period', 'recognize_period')
         self.viewInfo['study_period'] = self.config.getint('period', 'study_period')
 
-
-        self.dataset = 'marked_image_5min'
-        self.net_path = 'net_params_5min_alexnet.pth'
-        self.name_lst = ['BailinHE', 'BingHU', 'BowenFAN', 'ChenghaoLYU', 'HanweiCHEN', 'LiZHANG', 'LiujiaDU', 'PakKwanCHAN', 'QijieCHEN', 'QingboLI', 'RouwenGE', 'RuiGUO', 'RunzeWANG', 'RuochenXIE', 'SiqinLI', 'SiruiLI', 'TONGHiuYan', 'TszKuiCHOW', 'YanWU', 'YimingZOU', 'YuMingCHAN', 'YuanTIAN', 'YuchuanWANG', 'ZiwenLU', 'ZiyaoZHANG']
-        self.faceRecognitionButton.setEnabled(True)
-        # self.uploadVideoButton.setEnabled(True)
-        # self.uploadRosterButton.toggled.connect(self.trainData)
-
-
-
-
-        # cascade classifier
-        # self.faceCascade = cv2.CascadeClassifier('./lbpcascades/lbpcascade_frontalface.xml')
-        # self.faceCascade = cv2.CascadeClassifier('./lbpcascades/lbpcascade_profileface.xml')
-        self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_default.xml') #ok
-        # self.eyeCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_eye.xml')
-        # self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt.xml')
-        # self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt_tree.xml')
-        # self.faceCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_frontalface_alt2.xml') # fast haar
-        # self.eyeCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_lefteye_2splits.xml')
-        # self.eyeCascade = cv2.CascadeClassifier('./haarcascades/haarcascade_righteye_2splits.xml')
+        self.dataset = None
+        self.net_path = None
+        self.name_lst = None
+        self.net = None
 
 
     def uploadRoster(self):
+        """
+        choose student name roster in txt file, each student name should in one line
+        """
         self.chooseRosterPath()
 
         if self.name_lst is not None:
@@ -551,6 +595,9 @@ class App(QWidget, Ui_faceRfecognition):
             self.logQueue.put('Warning: not upload roster')
 
     def addInputFormat(self):
+        """
+        input zoom gallery mode: 5*5 or 7*7, which will use in frame cut later
+        """
         row_num, column_num= self.viewInfo.get('Row'), self.viewInfo.get('Column')
         self.formatDialog.rowLineEdit.setText(str(row_num))
         self.formatDialog.columnLineEdit.setText(str(column_num))
@@ -575,7 +622,9 @@ class App(QWidget, Ui_faceRfecognition):
             self.uploadVideoButton.setEnabled(True)
 
     def uploadVideo(self):
-        # get video path
+        """
+        get video path
+        """
         self.chooseVideo()
         if len(self.video)>0:
             self.uploadVideoButton.setEnabled(False)
@@ -585,16 +634,15 @@ class App(QWidget, Ui_faceRfecognition):
         else:
             self.logQueue.put('Warning: please upload training video')
             return
-
+        # dataset name
         self.dataset = 'marked_image_' + self.video.split('/')[-1].split('.')[0].split('_')[0]
 
-        # remove historical folder
+        # remove historical classify folder
         if os.path.exists(self.dataset):
             rmtree(self.dataset)
         # establish newly personal folder
         if not os.path.exists(self.dataset):
             os.makedirs(self.dataset)
-
 
         self.thread = VideoClassifyThread(self.video, self.dataset, self.name_lst, self.viewInfo)
         # connect its signal to the update_image slot
@@ -603,54 +651,10 @@ class App(QWidget, Ui_faceRfecognition):
         # self.thread.finished.connect(self.trainData)
         self.thread.start()
 
-
     def trainData(self):
-        # method1:
-        # try:
-        #     return_dict = multiprocessing.Manager().dict()
-        #     p = Process(target=trainProcess, args=(self.dataset, return_dict))
-        #     p.start()
-        #     p.join()
-        #     self.net_path = return_dict.get('net_path')
-        #     self.name_lst = return_dict.get('name_lst')
-        #     print(self.net_path)
-        #     print(self.name_lst)
-        # except Exception as e:
-        #     print("error:", e)
-        #     pass
-        # if not p.is_alive():
-        #     self.isFinishTrain = True
-        #     self.faceRecognitionButton.setEnabled(True)
-
-        # method2:
-        return
         self.thread = VideoTrainThread(self.dataset)
         self.thread.train_successful_signal.connect(self.successful_train)
         self.thread.start()
-
-        # method3:
-        # self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
-        # self.isFinishClassify = True
-        # preProcess.OCRprocessing(self.dataset, self.name_lst)
-        #
-        #
-        # if len(os.listdir(self.dataset)) < 10:
-        #     self.uploadVideoButton.setEnabled(True)
-        #     rmtree(self.dataset)  # remove the dataset which contain too small classes
-        #     self.logQueue.put('Warning: dataset has small number of classes, please reupload a longer training video')
-        #     self.dataset = None
-        #     return
-        #
-        # time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-        # print(time)
-        # self.net_path, self.name_lst = torchTrain.trainandsave(self.dataset)
-        # print(self.net_path)
-        # self.logQueue.put('Success: trainData')
-        # self.isFinishTrain = True
-        # self.faceRecognitionButton.setEnabled(True)
-        # time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-        # print(time)
-
 
     def faceRecognition(self):
         # self.logQueue.put('Start face recognition')
@@ -662,20 +666,18 @@ class App(QWidget, Ui_faceRfecognition):
         else:
             self.logQueue.put('Warning: please upload testing video')
             return
-
-        self.thread = VideoTestThread(self.video, self.name_lst, self.net_path, self.viewInfo)
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception as e:
+            print("error:", e)
+            pass
+        self.thread = VideoTestThread(self.video, self.name_lst, self.net_path, self.viewInfo, self.net)
         self.thread.log_queue.connect(self.send_message)
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.test_finish_signal.connect(self.successful_test)
-        # self.thread.finished.connect(self.successful_test)
         self.thread.start()
-
-        # self.cap = cv2.VideoCapture(self.video)
-        # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        # fps = self.cap.get(5)  # get the video fps
-        # self.num_frame = 1
 
     def plot(self):
         feedback_name = 'feedback.txt'
@@ -752,6 +754,7 @@ class App(QWidget, Ui_faceRfecognition):
             self.dataset = None
         elif switch == 1:
             self.faceDetectCaptureLabel.setText('<html><head/><body><p><span style=" color:#ff0000;">Zoom Video Window</span></p></body></html>')
+            self.logQueue.put('Finished construct dataset, now start training')
             self.trainData()
 
     def successful_train(self, info_dict):
@@ -759,6 +762,7 @@ class App(QWidget, Ui_faceRfecognition):
             self.logQueue.put('Success: trainData')
             self.net_path = info_dict['net_path']
             self.name_lst = info_dict['name_lst']
+            self.net = info_dict['net']
             self.isFinishTrain = True
             self.faceRecognitionButton.setEnabled(True)
 
@@ -782,14 +786,6 @@ class formatDialog(QDialog, Ui_format):
         column_validator = QRegExpValidator(regx, self.columnLineEdit)
         self.columnLineEdit.setValidator(column_validator)
 
-def trainProcess(dataset, return_dict):
-    time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-    print(time)
-    net_path, name_lst = torchTrain.trainandsave(dataset)
-    return_dict['net_path'] = net_path
-    return_dict['name_lst'] = name_lst
-    time = datetime.now().strftime('[%d/%m/%Y %H:%M:%S]')
-    print(time)
 
 if __name__=="__main__":
     if getattr(sys, 'frozen', False):

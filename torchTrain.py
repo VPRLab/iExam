@@ -14,10 +14,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, SubsetRandomSampler
 import os
-import shutil
 from sklearn.metrics import classification_report, confusion_matrix
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast, GradScaler
+import warnings
+import random
+
+import cv2
+from PIL import Image
+
+warnings.filterwarnings('ignore')
 
 if torch.cuda.is_available():
     DEVICE = torch.device('cuda:0')
@@ -30,7 +36,7 @@ else:
     DEVICE = torch.device('cpu')
     torch.manual_seed(42)
 
-np.random.seed(42)
+np.random.seed(100)
 
 
 def calculate_accuracy(y_pred, y_test):
@@ -77,7 +83,7 @@ def train(train_loader, net, criterion, optimizer, epoch, scaler, writer=None):
     for batch_index, (images, labels) in enumerate(stream, start=1):
         images = images.to(DEVICE, non_blocking=True)  # tensor size [batch_size, 3, img_w, img_h]
         labels = labels.to(DEVICE, non_blocking=True)  # tensor size [batch_size, ]
-
+        # dataset visualization using tensorboard
         # img_grid = utils.make_grid(images)
         # writer.add_image('train_images', img_grid)
         # writer.add_graph(net, images)
@@ -139,7 +145,7 @@ def test(test_loader, net, idx2class):
             y_batch = y_batch.to(DEVICE, non_blocking=True)
             y_test_pred = net(x_batch)
             _, y_pred_tag = torch.max(y_test_pred, dim=1)
-            y_pred_list.append(y_pred_tag.cpu().numpy().tolist())
+            y_pred_list.append(y_pred_tag.cpu().numpy().tolist())   # list shape: [_, batch_size]
             y_true_list.append(y_batch.cpu().numpy().tolist())
             accuracy = calculate_accuracy(y_test_pred, y_batch)
             metric_monitor.update('Accuracy', accuracy.item())
@@ -151,7 +157,7 @@ def test(test_loader, net, idx2class):
     y_pred_array = []
     y_true_array = []
     for i in range(len(y_pred_list)):
-        y_pred_array += y_pred_list[i]
+        y_pred_array += y_pred_list[i]  # 1-dimension
         y_true_array += y_true_list[i]
     # print('y_pred_list: ', y_pred_array)
     # print('y_true_list: ', y_true_array)
@@ -217,14 +223,12 @@ def loadtraindata(path):
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomRotation(degrees=(-90, 90)),
             transforms.RandomVerticalFlip(p=0.5),
-            transforms.Resize((300, 300)),
-            transforms.CenterCrop((250, 250)),
-            transforms.RandomCrop((200, 200)),
+            transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]),
         'test': transforms.Compose([
-            transforms.Resize((200, 200)),
+            transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
@@ -356,6 +360,51 @@ def loadtraindata(path):
     return train_loader, val_loader, test_loader, filename, tuple(dataset.classes), idx2class
 
 
+def loadtestdata(test_dataset='dataset_test'):
+    filename = test_dataset.split('/')[-1].split('_')[-1]
+    print('path:', test_dataset)
+    print('filename:', filename)
+
+    image_transforms = {
+        'test': transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+    }
+
+    # draw whole dataset class distribution
+    if os.path.exists(test_dataset + '/.DS_Store'):
+        os.remove(test_dataset + '/.DS_Store')
+    dataset = datasets.ImageFolder(test_dataset, transform=image_transforms['test'])
+    idx2class = {v: k for k, v in dataset.class_to_idx.items()}
+    # plt.figure(figsize=(18, 8))
+    # plot_from_dict(get_class_distribution(dataset, idx2class), plot_title='Entire Dataset', legend_switch=1)
+    # plt.savefig('Entire Dataset Distribution.eps', dpi=600, format='eps')
+    print('classes: ', dataset.classes)  # all classes in dataset
+    print('number of classes: ', len(dataset.classes), dataset.class_to_idx)
+    print('dataset: ', type(dataset), dataset)
+
+    '''
+    use new test dataset to test model accuracy, need to delete finally
+    '''
+    test_ratio = 1
+    test_dataset = datasets.ImageFolder(test_dataset, transform=image_transforms['test'])
+    dataset_size = len(test_dataset)
+    dataset_indices = list(range(dataset_size))
+    np.random.shuffle(dataset_indices)
+    test_split_index = int(np.floor(test_ratio * dataset_size))
+    test_idx = dataset_indices[:test_split_index]
+    # test_sampler = SubsetRandomSampler(test_idx)
+    # batch_size: number of iteration in each time
+    # when use SubsetRandomSampler cannot use shuffle, shuffle: whether random sort in each time
+    test_loader = DataLoader(dataset=test_dataset, batch_size=20, shuffle=False, num_workers=8, pin_memory=True)
+
+    print('len of test set: ', len(test_loader), test_loader)
+
+    return test_loader, filename, tuple(dataset.classes), idx2class
+
+
 class Net(nn.Module):  # define net, which extends torch.nn.Module
     def __init__(self, class_num):
         super(Net, self).__init__()
@@ -402,6 +451,10 @@ def trainandsave(path, epoches):
     net = models.resnet50(pretrained=True, )
     net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
 
+    # resNet101
+    # net = models.resnet101(pretrained=True, )
+    # net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
+
     # resnet152
     # net = models.resnet152(pretrained=True, )
     # net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
@@ -414,6 +467,10 @@ def trainandsave(path, epoches):
     # net = models.densenet161(pretrained=True, )
     # net.classifier = nn.Linear(2208, len(classes))
 
+    # vgg11 CUDA out of memory
+    # net = models.vgg11(pretrained=True, )
+    # net.classifier[6] = nn.Linear(4096, len(classes))
+
     # vgg11_bn CUDA out of memory
     # net = models.vgg11_bn(pretrained=True, )
     # net.classifier[6] = nn.Linear(4096, len(classes))
@@ -422,31 +479,27 @@ def trainandsave(path, epoches):
     # net = models.mobilenet_v3_small(pretrained=False, num_classes=len(classes), )
 
     # net = models.mobilenet_v3_small(pretrained=True, )
-    # net.classifier = nn.Sequential(
-    #     nn.Linear(576, 1024),
-    #     nn.Hardswish(inplace=True),
-    #     nn.Dropout(p=0.2, inplace=True),
-    #     nn.Linear(1024, len(classes)),
-    # )
+    # net.classifier[3] = nn.Linear(1024, len(classes))
 
     # squeezenet1_1
     # net = models.squeezenet1_1(pretrained=True, )
     # net.classifier[1] = nn.Conv2d(512, len(classes), kernel_size=(1,1), stride=(1,1))
 
-    print(net)
+    # inception_v3
+    # net = models.inception_v3(pretrained=True, aux_logits=True)
+    # net.fc = nn.Linear(2048, len(classes))
+    # net.AuxLogits = models.inception.InceptionAux(768, len(classes))
+
+    # print(net)
     net.to(DEVICE)
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)  # learning rate=0.002
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)  # learning rate=0.001
     criterion = nn.CrossEntropyLoss().to(DEVICE)  # loss function
-    scaler = GradScaler()  # automatic mixed precison
+    scaler = GradScaler()  # automatic mixed precision
+
     # training part
-
-    # memory_summary = torch.cuda.memory_summary(device='cuda', abbreviated=False)
-    # print(memory_summary)
-    # print(torch.cuda.memory_stats(device='cuda'))
-
     for epoch in range(epoches):  # 10 epoch
-        # each epoch train all images, so total train 5 times
-        # writer = SummaryWriter('runs/iExam_20220127_0905')
+        # each epoch train all images, so total train 10 times
+        # writer = SummaryWriter('runs/iExam_20220127_0518_1')
         # train_loss, train_accuracy,scaler = train(train_loader, net, criterion, optimizer, epoch, scaler, writer)
         train_loss, train_accuracy, scaler = train(train_loader, net, criterion, optimizer, epoch, scaler)
         val_loss, val_accuracy = validate(validate_loader, net, criterion, epoch)
@@ -477,23 +530,132 @@ def trainandsave(path, epoches):
     test_accuracy = test(test_loader, net, idx2class)
     # print('test accuracy:', test_accuracy)
     print('Finished Test')
-    textfile = open('tmp.txt', 'a')
-    textfile.write('Test_accuracy = [')
-    string = ', '.join(str(item) for item in test_accuracy)
-    textfile.write(string + ']\n')
-    textfile.close()
+    # textfile = open('tmp.txt', 'a')
+    # textfile.write('Test_accuracy = [')
+    # string = ', '.join(str(item) for item in test_accuracy)
+    # textfile.write(string + ']\n')
+    # textfile.close()
+
     # save net
     # torch.save(net, 'net_'+filename+'.pkl')  # save structure and parameter
-    file_name = 'net_params_resnet50_Pretrain_10epoch_20220501_' + filename + '.pth'
+    file_name = 'net_params_resnet50_Pretrain_10epoch_224x224_' + filename + '.pth'
     torch.save(net.state_dict(), file_name)  # only save parameter
 
     return file_name, classes, net
 
 
+def another_dataset_test(net_path, test_dataset='dataset_test'):
+    test_loader, filename, classes, idx2class = loadtestdata(test_dataset)
+
+    # googleNet:
+    # net = models.googlenet(pretrained=True)
+    # net.fc = nn.Linear(1024, len(classes))
+
+    # resNet18
+    # net = models.resnet18(pretrained=True, )
+    # net.fc = nn.Linear(512 * models.resnet.BasicBlock.expansion, len(classes))
+
+    # resNet50
+    net = models.resnet50(pretrained=True, )
+    net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
+
+    # print(net)
+    net.load_state_dict(torch.load(net_path))
+    net.to(DEVICE)
+    test_accuracy = test(test_loader, net, idx2class)
+    # print('test accuracy:', test_accuracy)
+    print('Finished Test')
+    textfile = open('tmp.txt', 'a')
+    textfile.write('Test_accuracy = [')
+    string = ', '.join(str(item) for item in test_accuracy)
+    textfile.write(string + ']\n')
+    textfile.close()
+
+def image_test(net_path, classes):
+    # googleNet:
+    # net = models.googlenet(pretrained=True)
+    # net.fc = nn.Linear(1024, len(classes))
+
+    # resNet18
+    # net = models.resnet18(pretrained=True, )
+    # net.fc = nn.Linear(512 * models.resnet.BasicBlock.expansion, len(classes))
+
+    # resNet50
+    net = models.resnet50(pretrained=True, )
+    net.fc = nn.Linear(512 * models.resnet.Bottleneck.expansion, len(classes))
+
+    # alexNet
+    # net = models.alexnet(pretrained=True, )
+    # net.classifier[6] = nn.Linear(4096, len(classes))
+
+    net.load_state_dict(torch.load(net_path))
+    net.to(DEVICE)
+    net.eval()
+
+
+    data_transform = transforms.Compose([
+        transforms.Resize((224, 224)),  # reszie image to 224*224
+        transforms.ToTensor(),  # each pixel to tensor
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    img_pred_lst = []
+    img_pred_score = []
+    metric_monitor = MetricMonitor()
+    print('classes:',classes)
+    stream = tqdm(image_sampler())
+    for name in stream:
+        image = cv2.imread(name)
+        image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        # image.show()
+        image = data_transform(image)  # change PIL image to tensor
+        # print('before:', image.shape, image)
+        image = image.view(-1, 3, 224, 224)  # change 3-dimensional to 4-dimensional for input
+        # print('after:',image.shape, image)
+
+        output = net(image.to(DEVICE, non_blocking=True))
+        y_pred_softmax = torch.log_softmax(output, dim=1)
+        _, y_pred_tag = torch.max(y_pred_softmax, dim=1)
+        tmp = y_pred_tag.cpu().detach().numpy()
+        if classes[tmp[0]] != name.split('\\')[1].split('_')[0]:
+            img_pred_score.append(0)
+            metric_monitor.update('Accuracy', 0)
+        else:
+            img_pred_score.append(1)
+            metric_monitor.update('Accuracy', 1)
+        img_pred_lst.append(classes[tmp[0]])
+        stream.set_description(
+            'Test.  {metric_monitor}'.format(metric_monitor=metric_monitor)
+        )
+
+            # print(y_pred_tag.cpu().detach().numpy())
+#     print(img_pred_lst)
+    img_compare = zip(img_pred_lst, stream)
+    # print('img_compare', tuple(img_compare))
+    print('sum: ', sum(img_pred_score), 'len is: ', len(img_pred_score))
+
+
+def image_sampler(image_path='dataset_fusion'):
+    img_path_lst = []
+    return_lst = []
+    for root, dirs, files in os.walk(image_path):
+        for name in files:
+            img_path_lst.append(os.path.join(root, name))
+
+    for num in range(len(img_path_lst)//5):
+        while True:
+            tmp = random.randint(0, len(img_path_lst))
+            if img_path_lst[tmp] in return_lst:
+                continue
+            else:
+                return_lst.append(img_path_lst[tmp])
+                break
+    # print(return_lst)
+    return return_lst
+
 if __name__ == '__main__':
     path = 'marked_image_5min'
     before = time.asctime(time.localtime(time.time()))
     print(before)
-    trainandsave(path, epoches=10)
+    # trainandsave(path, epoches=10)
     after = time.asctime(time.localtime(time.time()))
     print(after)

@@ -44,7 +44,7 @@ def opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                 clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
                 if clip_img.size != 0:
                     cv2.imwrite(dataset + '/' + historical_name + '/{0}.jpg'.format(num_frame), clip_img)
-                cv2.rectangle(base_img, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                cv2.rectangle(base_img, (x, y), (x + w, y + h), (246, 108, 61),2)
 
             else:
                 cropped = grey[clip_height * (face_col + 1) - 32:clip_height * (face_col + 1), clip_width * face_row:clip_width * face_row + 120]  # decrease length
@@ -55,21 +55,19 @@ def opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                     text = pytesseract.image_to_string(thresh1)  # OCR
                     text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                     if text == '':
-                        print('cannot recognize text using OCR frame num is:', num_frame, [face_row, face_col])
+                        # print('cannot recognize text using OCR frame num is:', num_frame, [face_row, face_col])
                         # cv2.imwrite('cropped text.jpg', cropped_text)
                         thresh1 = cv2.Canny(image=thresh1, threshold1=80, threshold2=150)
                         text = pytesseract.image_to_string(thresh1)  # OCR
                         text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                         if text == '':
-                            print('is empty ', [face_row, face_col], text, 'k=', k)
+                            # print('is empty ', [face_row, face_col], text, 'k=', k)
                             continue
                         else:
                             text = string_comparison(text, name_lst)
-                            if text not in name_lst:
-                                print('not match ', [face_row, face_col], text, 'k=', k)
-                            else:
-                                # print('text:', text)
+                            if text in name_lst:
                                 break
+
                     else:
                         text = string_comparison(text, name_lst)
                         if text not in name_lst:
@@ -77,15 +75,13 @@ def opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                             text = pytesseract.image_to_string(thresh1)  # OCR
                             text = ''.join([char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                             if text == '':
-                                print('is empty ', [face_row, face_col], text, 'k=', k)
+                                # print('is empty ', [face_row, face_col], text, 'k=', k)
                                 continue
                             else:
                                 text = string_comparison(text, name_lst)
-                                if text not in name_lst:
-                                    print('not match ', [face_row, face_col], text, 'k=', k)
-                                else:
-                                    # print('text:', text)
+                                if text in name_lst:
                                     break
+
                         else:
                             # print('text:', text)
                             break
@@ -106,7 +102,7 @@ def opencv_haar_cascade(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                 clip_img = grey[y - 10:y + h + 10, x - 10:x + w + 10]
                 if clip_img.size != 0:
                     cv2.imwrite(dataset + '/' + text + '/{0}.jpg'.format(num_frame), clip_img)
-                cv2.rectangle(base_img, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                cv2.rectangle(base_img, (x, y), (x + w, y + h), (246, 108, 61),2)
 
     return base_img, tmp_dict
 
@@ -172,8 +168,8 @@ def opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                 if saved_face.size != 0:
                     written_img = cv2.cvtColor(saved_face, cv2.COLOR_BGR2GRAY)
                     cv2.imwrite(dataset + '/' + historical_name + '/{0}.jpg'.format(num_frame), written_img)
-                cv2.putText(base_img, confidence_score, (int(left * aspect_ratio_x), int(top * aspect_ratio_y - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)),(int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (255, 255, 255),1)  # draw rectangle to main image
+                # cv2.putText(base_img, confidence_score, (int(left * aspect_ratio_x), int(top * aspect_ratio_y - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)),(int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (246, 108, 61),2)  # draw rectangle to main image
 
             else:
                 cropped = grey[clip_height * (face_col + 1) - 32:clip_height * (face_col + 1),
@@ -186,22 +182,20 @@ def opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                     text = ''.join(
                         [char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                     if text == '':
-                        print('cannot recognize text using OCR frame num is:', num_frame, [face_row, face_col])
+                        # print('cannot recognize text using OCR frame num is:', num_frame, [face_row, face_col])
                         # cv2.imwrite('cropped text.jpg', cropped_text)
                         thresh1 = cv2.Canny(image=thresh1, threshold1=80, threshold2=150)
                         text = pytesseract.image_to_string(thresh1)  # OCR
                         text = ''.join(
                             [char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                         if text == '':
-                            print('is empty ', [face_row, face_col], text, 'k=', k)
+                            # print('is empty ', [face_row, face_col], text, 'k=', k)
                             continue
                         else:
                             text = string_comparison(text, name_lst)
-                            if text not in name_lst:
-                                print('not match ', [face_row, face_col], text, 'k=', k)
-                            else:
-                                # print('text:', text)
+                            if text in name_lst:
                                 break
+
                     else:
                         text = string_comparison(text, name_lst)
                         if text not in name_lst:
@@ -210,15 +204,13 @@ def opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                             text = ''.join(
                                 [char for char in text if char.isalpha()])  # remove the character like '\n',' ','\0Xc'
                             if text == '':
-                                print('is empty ', [face_row, face_col], text, 'k=', k)
+                                # print('is empty ', [face_row, face_col], text, 'k=', k)
                                 continue
                             else:
                                 text = string_comparison(text, name_lst)
-                                if text not in name_lst:
-                                    print('not match ', [face_row, face_col], text, 'k=', k)
-                                else:
-                                    # print('text:', text)
+                                if text in name_lst:
                                     break
+
                         else:
                             # print('text:', text)
                             break
@@ -245,8 +237,8 @@ def opencv_dnn_classify(dataset, name_lst, frame, num_frame, viewInfo, tmp_dict)
                 if saved_face.size != 0:
                     written_img = cv2.cvtColor(saved_face, cv2.COLOR_BGR2GRAY)
                     cv2.imwrite(dataset + '/' + text + '/{0}.jpg'.format(num_frame), written_img)
-                cv2.putText(base_img, confidence_score, (int(left * aspect_ratio_x), int(top * aspect_ratio_y - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)),(int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (255, 255, 255),1)  # draw rectangle to main image
+                # cv2.putText(base_img, confidence_score, (int(left * aspect_ratio_x), int(top * aspect_ratio_y - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                cv2.rectangle(base_img, (int(left * aspect_ratio_x), int(top * aspect_ratio_y)),(int(right * aspect_ratio_x), int(bottom * aspect_ratio_y)), (246, 108, 61),2)  # draw rectangle to main image
 
     return base_img, tmp_dict
 
