@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, SubsetRandomSampler
 import os
 from sklearn.metrics import classification_report, confusion_matrix
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast, GradScaler
 import warnings
 import random
