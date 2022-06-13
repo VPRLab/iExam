@@ -1,99 +1,276 @@
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Opencv JS</title>
-    <script async src="opencv.js" onload="openCvReady();"></script>
-    <!-- <script src="utils.js"></script> -->
+    <title>realtime iExam</title>
     <style>
-        #cam_input, #canvas_output {
+        body {
+            margin: 0;
+            align-self: center;
+        }
+        .container {
+            display: grid;
+            width: 100%;
+            height: 1710px;
+            grid-template-areas: 
+                "title title title"
+                "tip tip tip"
+                "button button button"
+                "nav1 main1 nav2"
+                "nav1 middle nav2"
+                "nav1 main2 nav2"
+                "nav1 foot nav2";
+            grid-template-rows: 60px 50px 50px 1fr 50px 1fr 100px;
+            grid-template-columns: 150px 1fr 150px;
+        }
+
+        #title {
+            grid-area: title;
+            /* background-color: #8ca0ff; */
+            font-size: 50px;
+            margin: 0;
+            text-align: center;
+        }
+
+        #tip {
+            grid-area: tip;
+            /* background-color: darkorange; */
+            font-size: 25px;
+            text-align: center; 
+        }
+
+        #button {
+            grid-area: button;
+            text-align: center;
+        }
+        #btn1, #btn2 {
+            border: 2px solid black;
+            background-color: white;
+            border-color: cornflowerblue;
+            padding: 14px 28px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #middle {
+            grid-area: middle;
+            /* background-color: deepskyblue; */
+        }
+
+        #nav1 {
+            grid-area: nav1;
+            /* background-color: #ffa08c; */
+        }
+
+        #nav2 {
+            grid-area: nav2;
+            /* background-color: cornflowerblue; */
+        }
+
+        #main1 {
+            grid-area: main1;
+            /* background-color: #ffff64; */
+        }
+
+        #cam_container {
+            position: relative;
+            text-align: center;
+        }
+
+        #cam_input {
             border: 1px solid #999;
+            object-fit: fill;
+        }
+
+        #zoom_window_text {
+            font-size: 50px;
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #add {
+            cursor: pointer;
+            z-index: 1;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #main2 {
+            grid-area: main2;
+            /* background-color: darkcyan; */
+        }
+
+        #output_container {
+            position: relative;
+            text-align: center;
+            border: 1px solid #999;
+        }
+
+        #process_window_text {
+            font-size: 50px;
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #footer {
+            grid-area: foot;
+            /* background-color: #8cffa0; */
+            text-align: center;
         }
     </style>
 </head>
-<body>
-    <div>
-        <video id="cam_input" width="640" height="360"></video>
-    </div>
-    <br/>
-    <div>
-        <canvas id="canvas_output" width="640" height="360"></canvas>
-    </div>
+<body onload="checkBrowser()">
+    <div class="container">
+        <div id="title">iExam</div>
+        <div id="tip">Please click add button to import the Zoom stream. Then you can scroll down to the iExam window.</div>
+        <div id="button">
+            <button type="button" id="btn1" onclick="btn1_click()">Start Exam</button>
+            <button type="button" id="btn2" onclick="btn2_click()">End Up</button>
+        </div>
+        <div id="middle"></div>
+        <nav id="nav1"></nav>
+        <nav id="nav2"></nav>
+        <div id="main1">
+            <div id="cam_container">
+                <video id="cam_input" width="100%" height="690px"></video>
+                <p id="zoom_window_text">Zoom window</p>
+                <img id="add" src="add.svg" alt="upload video window" width="128" height="128">
+            </div>
+        </div>
+        <div id="main2">
+            <div id="output_container">
+                <p id="process_window_text">iExam window</p>
+                <canvas id="canvas_output" height="690px">This box is for capturing student face</canvas>
+            </div>
+        </div>
+        <div id="footer">
+            <p>Details for iExam please refer to slides: <a href="https://daoyuan14.github.io/slides/Expo21_iExam.pdf" target="_blank">https://daoyuan14.github.io/slides/Expo21_iExam.pdf</a></p>
+            <p>Post-exam recording analysis for desktop version, please view: <a href="https://github.com/VPRLab/iExam/tree/main" target="_blank">https://github.com/VPRLab/iExam/tree/main</p>
+        </div>
+    </div>         
 </body>
 <script type="text/JavaScript">
+
+let add_button = document.getElementById("add");
+let zoom_window_text = document.getElementById("zoom_window_text");
+let process_window_text = document.getElementById("process_window_text");
+let video = document.getElementById("cam_input");
+let output = document.getElementById("canvas_output");
+let container = document.getElementById("container");
+let utils = new Utils();
+
+function checkBrowser() {
+    if((navigator.userAgent.indexOf("Opera") || navigator.userAgent.indexOf('OPR')) != -1 || navigator.userAgent.indexOf("Chrome") != -1 || navigator.userAgent.indexOf("Firefox") != -1 || ((navigator.userAgent.indexOf("MSIE") != -1 ) || (!!document.documentMode == true )))
+        console.log("browser owns capture window function")
+    else if(navigator.userAgent.indexOf("Safari") != -1){
+        while(true)
+            alert("You use Safari now, please change another browser because Safari not support capture window function");
+    }
+    else 
+       alert('unknown');
+}
+
+function btn1_click() {
+    let today = new Date();
+    let time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    console.log('start exam ' + time);
+}
+
+function btn2_click() {
+    let today = new Date();
+    let time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    console.log('end up exam ' + time);
+}
+
+add.addEventListener("click", function(e) {
+    navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+    .then(function(stream) {
+        let settings = stream.getVideoTracks()[0].getSettings();
+        console.log(settings);
+        add_button.style.display = "none";
+        zoom_window_text.style.display = "none";
+        process_window_text.style.display = "none";
+        // FPS = settings.frameRate;
+        var output_width = window.innerWidth-300;
+        output.width = output_width;
+        video.width = output_width;
+        video.srcObject = stream;
+        video.play();
+    })
+    .then(()=> {
+        utils.loadOpenCv(openCvReady);
+    })
+    .catch(function(err) {
+        console.log("An error occurred! " + err);
+    });
+})
+
 function openCvReady() {
-    cv['onRuntimeInitialized']=()=>{
-        let FPS = 0.04;
-        let video = document.getElementById("cam_input"); // video is the id of video tag
-        navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
-        .then(function(stream) {
-            video.srcObject = stream;
-            let settings = stream.getVideoTracks()[0].getSettings();
-            console.log(settings);
-
-            // FPS = settings.frameRate;
-            video.play();
-        })
-        .catch(function(err) {
-            console.log("An error occurred! " + err);
-        });
-        // console.log(cv);
-        let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-        let dst = new cv.Mat(video.height, video.width, cv.CV_8UC1);
-        let gray = new cv.Mat();
-        let cap = new cv.VideoCapture(cam_input);
-        let faces = new cv.RectVector();
-        let classifier = new cv.CascadeClassifier();
-        let minsize = new cv.Size(0, 0);
-        let maxsize = new cv.Size(1000, 1000);
-        let utils = new Utils();
-        let faceCascadeFile = 'haarcascade_frontalface_default.xml';
-        utils.createFileFromUrl(faceCascadeFile, '../haarcascades/'+faceCascadeFile, () => {
-            classifier.load(faceCascadeFile); // in the callback, load the cascade from file 
-        });
-        let face_row = -1;
-        let face_col = -1;
-        let clip_width = video.width/5;
-        let clip_height = video.height/5;
-        function processVideo() {
-            let begin = Date.now();
-            if (video.srcObject!=null){
-                cap.read(src);
-                src.copyTo(dst);
-                cv.cvtColor(dst, gray, cv.COLOR_RGBA2GRAY, 0);
-                try{
-                    classifier.detectMultiScale(gray, faces, 1.1, 3);
-                    console.log("face size: "+ faces.size());
-                }catch(err){
-                    console.log(err);
-                }
-                for (let i = 0; i < faces.size(); ++i) {
-                    let face = faces.get(i);
-                    // console.log(face);
-                    let face_row = parseInt(face.y/clip_height);
-                    let face_col = parseInt(face.x/clip_width);
-
-                    let tmp_row = parseInt((face.y+face.height-5) / clip_height);
-                    let tmp_col = parseInt((face.x+face.width-5) / clip_width);
-                    // console.log([face_row, face_col, tmp_row, tmp_col]);
-                    if (face.width>=clip_width || face.height>=clip_height || tmp_row!=face_row || tmp_col!=face_col)
-                        continue;
-
-                    let point1 = new cv.Point(face.x, face.y);
-                    let point2 = new cv.Point(face.x + face.width, face.y + face.height);
-                    cv.rectangle(dst, point1, point2, [255, 0, 0, 255]);
-                }
-                cv.imshow("canvas_output", dst);
+    // console.log(cv);
+    let FPS = 30;
+    let video = document.getElementById("cam_input");
+    let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+    let dst = new cv.Mat(video.height, video.width, cv.CV_8UC1);
+    let gray = new cv.Mat();
+    let cap = new cv.VideoCapture(cam_input);
+    let faces = new cv.RectVector();
+    let classifier = new cv.CascadeClassifier();
+    let minsize = new cv.Size(0, 0);
+    let maxsize = new cv.Size(1000, 1000);
+    let faceCascadeFile = 'haarcascade_frontalface_default.xml';
+    utils.createFileFromUrl(faceCascadeFile, faceCascadeFile, () => {
+        try{classifier.load(faceCascadeFile);} // in the callback, load the cascade from file 
+        catch(err){console.log(err);}
+    });
+    let face_row = -1;
+    let face_col = -1;
+    let clip_width = video.width/5;
+    let clip_height = video.height/5;
+    function processVideo() {
+        let begin = Date.now();
+        if (video.srcObject!=null){
+            cap.read(src);
+            src.copyTo(dst);
+            cv.cvtColor(dst, gray, cv.COLOR_RGBA2GRAY, 0);
+            try{
+                classifier.detectMultiScale(gray, faces, 1.1, 3);
+                let today = new Date();
+                let time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+                console.log("time: ", time, " face size: "+ faces.size());
+            }catch(err){
+                console.log(err);
             }
-            // schedule next one.
-            let delay = 1000/FPS - (Date.now() - begin);
-            setTimeout(processVideo, delay);
+            for (let i = 0; i < faces.size(); ++i) {
+                let face = faces.get(i);
+                console.log('face (' + i + ') ' + [face.x, face.y, face.width, face.height]);
+                let face_row = parseInt(face.y/clip_height);
+                let face_col = parseInt(face.x/clip_width);
+
+                let tmp_row = parseInt((face.y+face.height-5) / clip_height);
+                let tmp_col = parseInt((face.x+face.width-5) / clip_width);
+                // console.log([face_row, face_col, tmp_row, tmp_col]);
+                //check for error
+                // if (face.width>=clip_width || face.height>=clip_height || tmp_row!=face_row || tmp_col!=face_col)
+                //     continue;
+
+                let point1 = new cv.Point(face.x, face.y);
+                let point2 = new cv.Point(face.x + face.width, face.y + face.height);
+                cv.rectangle(dst, point1, point2, [73, 171, 232, 255], 2);
+            }
+            cv.imshow("canvas_output", dst);
         }
-        // schedule first one.
-        setTimeout(processVideo, 0);
-        // 识别多少， 提高识别率
-        // 测cpu的
-    };
+        // schedule next one.
+        let delay = 1000/FPS - (Date.now() - begin);
+        setTimeout(processVideo, delay);
+    }
+    // schedule first one.
+    setTimeout(processVideo, 0); 
 }
 
 function Utils() {
@@ -115,6 +292,40 @@ function Utils() {
         };
         request.send();
         
+    };
+
+    const OPENCV_URL = 'opencv.js';
+    this.loadOpenCv = function(onloadCallback) {
+        let script = document.createElement('script');
+        script.setAttribute('async', '');
+        script.setAttribute('type', 'text/javascript');
+        script.addEventListener('load', async () => {
+            if (cv.getBuildInformation)
+            {
+                console.log(cv.getBuildInformation());
+                onloadCallback();
+            }
+            else
+            {
+                // WASM
+                if (cv instanceof Promise) {
+                    cv = await cv;
+                    console.log(cv.getBuildInformation());
+                    onloadCallback();
+                } else {
+                    cv['onRuntimeInitialized']=()=>{  //satisfy this condition
+                        console.log(cv.getBuildInformation()); 
+                        onloadCallback();
+                    }
+                }
+            }
+        });
+        script.addEventListener('error', () => {
+            self.printError('Failed to load ' + OPENCV_URL);
+        });
+        script.src = OPENCV_URL;
+        let node = document.getElementsByTagName('script')[0];
+        node.parentNode.insertBefore(script, node);
     };
 }
 

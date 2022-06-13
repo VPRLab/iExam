@@ -171,7 +171,7 @@ class VideoTestThread(QThread):
         self.DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # load net
-        self.net.load_state_dict(torch.load(self.net_path))
+        # self.net.load_state_dict(torch.load(self.net_path))
         # self.net.load_state_dict(torch.load(self.net_path, map_location='cpu'))
         self.net.to(self.DEVICE)
         self.net.eval()

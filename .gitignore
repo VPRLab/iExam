@@ -1,0 +1,43 @@
+# python
+.idea/
+.vscode/
+__pycache__/
+OCR_evaluation.py
+test.py
+test_test.py
+core_os_version.spec
+
+
+# model file:
+*.pth
+*.txt
+*.zip
+
+
+# eps file:
+*.eps
+
+
+# video file:
+*.mp4
+
+# folder
+dataset_test
+history
+iExamenv
+marked_image_5min
+marked_image_5min_backup
+marked_image_5min_of10min
+marked_image_5min_of30min
+marked_image_5min_of90min
+marked_image_90min
+marked_image_4999video
+models
+new_env
+OCR_evaluation
+runs
+
+
+
+
+
