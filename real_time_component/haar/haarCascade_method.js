@@ -1,162 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>realtime iExam</title>
-    <style>
-        body {
-            margin: 0;
-            align-self: center;
-        }
-        .container {
-            display: grid;
-            width: 100%;
-            height: 1710px;
-            grid-template-areas: 
-                "title title title"
-                "tip tip tip"
-                "button button button"
-                "nav1 main1 nav2"
-                "nav1 middle nav2"
-                "nav1 main2 nav2"
-                "nav1 foot nav2";
-            grid-template-rows: 60px 50px 50px 1fr 50px 1fr 100px;
-            grid-template-columns: 150px 1fr 150px;
-        }
-
-        #title {
-            grid-area: title;
-            /* background-color: #8ca0ff; */
-            font-size: 50px;
-            margin: 0;
-            text-align: center;
-        }
-
-        #tip {
-            grid-area: tip;
-            /* background-color: darkorange; */
-            font-size: 25px;
-            text-align: center; 
-        }
-
-        #button {
-            grid-area: button;
-            text-align: center;
-        }
-        #btn1, #btn2 {
-            border: 2px solid black;
-            background-color: white;
-            border-color: cornflowerblue;
-            padding: 14px 28px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        #middle {
-            grid-area: middle;
-            /* background-color: deepskyblue; */
-        }
-
-        #nav1 {
-            grid-area: nav1;
-            /* background-color: #ffa08c; */
-        }
-
-        #nav2 {
-            grid-area: nav2;
-            /* background-color: cornflowerblue; */
-        }
-
-        #main1 {
-            grid-area: main1;
-            /* background-color: #ffff64; */
-        }
-
-        #cam_container {
-            position: relative;
-            text-align: center;
-        }
-
-        #cam_input {
-            border: 1px solid #999;
-            object-fit: fill;
-        }
-
-        #zoom_window_text {
-            font-size: 50px;
-            position: absolute;
-            top: 20%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        #add {
-            cursor: pointer;
-            z-index: 1;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        #main2 {
-            grid-area: main2;
-            /* background-color: darkcyan; */
-        }
-
-        #output_container {
-            position: relative;
-            text-align: center;
-            border: 1px solid #999;
-        }
-
-        #process_window_text {
-            font-size: 50px;
-            position: absolute;
-            top: 40%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        #footer {
-            grid-area: foot;
-            /* background-color: #8cffa0; */
-            text-align: center;
-        }
-    </style>
-</head>
-<body onload="checkBrowser()">
-    <div class="container">
-        <div id="title">iExam</div>
-        <div id="tip">Please click add button to import the Zoom stream. Then you can scroll down to the iExam window.</div>
-        <div id="button">
-            <button type="button" id="btn1" onclick="btn1_click()">Start Exam</button>
-            <button type="button" id="btn2" onclick="btn2_click()">End Up</button>
-        </div>
-        <div id="middle"></div>
-        <nav id="nav1"></nav>
-        <nav id="nav2"></nav>
-        <div id="main1">
-            <div id="cam_container">
-                <video id="cam_input" width="100%" height="690px"></video>
-                <p id="zoom_window_text">Zoom window</p>
-                <img id="add" src="add.svg" alt="upload video window" width="128" height="128">
-            </div>
-        </div>
-        <div id="main2">
-            <div id="output_container">
-                <p id="process_window_text">iExam window</p>
-                <canvas id="canvas_output" height="690px">This box is for capturing student face</canvas>
-            </div>
-        </div>
-        <div id="footer">
-            <p>Details for iExam please refer to slides: <a href="https://daoyuan14.github.io/slides/Expo21_iExam.pdf" target="_blank">https://daoyuan14.github.io/slides/Expo21_iExam.pdf</a></p>
-            <p>Post-exam recording analysis for desktop version, please view: <a href="https://github.com/VPRLab/iExam/tree/main" target="_blank">https://github.com/VPRLab/iExam/tree/main</p>
-        </div>
-    </div>         
-</body>
-<script type="text/JavaScript">
-
 let add_button = document.getElementById("add");
 let zoom_window_text = document.getElementById("zoom_window_text");
 let process_window_text = document.getElementById("process_window_text");
@@ -188,7 +29,7 @@ function btn2_click() {
     console.log('end up exam ' + time);
 }
 
-add.addEventListener("click", function(e) {
+add_button.addEventListener("click", function(e) {
     navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
     .then(function(stream) {
         let settings = stream.getVideoTracks()[0].getSettings();
@@ -196,12 +37,18 @@ add.addEventListener("click", function(e) {
         add_button.style.display = "none";
         zoom_window_text.style.display = "none";
         process_window_text.style.display = "none";
+        console.log('dimension:', video.width, video.height);
+        console.log(window.innerWidth, 'output_width:', output_width, video.width);
+            
         // FPS = settings.frameRate;
         var output_width = window.innerWidth-300;
         output.width = output_width;
         video.width = output_width;
         video.srcObject = stream;
         video.play();
+        console.log('dimension:', video.width, video.height);
+        console.log(window.innerWidth, 'output_width:', output_width, video.width);
+         
     })
     .then(()=> {
         utils.loadOpenCv(openCvReady);
@@ -211,10 +58,12 @@ add.addEventListener("click", function(e) {
     });
 })
 
+
 function openCvReady() {
     // console.log(cv);
     let FPS = 30;
     let video = document.getElementById("cam_input");
+    console.log('creat frame:', video.width, video.height);
     let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
     let dst = new cv.Mat(video.height, video.width, cv.CV_8UC1);
     let gray = new cv.Mat();
@@ -224,9 +73,12 @@ function openCvReady() {
     let minsize = new cv.Size(0, 0);
     let maxsize = new cv.Size(1000, 1000);
     let faceCascadeFile = 'haarcascade_frontalface_default.xml';
-    utils.createFileFromUrl(faceCascadeFile, faceCascadeFile, () => {
+    let faceCascadeFileLink = 'https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml'
+    utils.createFileFromUrl(faceCascadeFile, faceCascadeFileLink, () => {
+        document.getElementById('middle').innerHTML = 'Downloading haar-cascade model';
         try{classifier.load(faceCascadeFile);} // in the callback, load the cascade from file 
         catch(err){console.log(err);}
+        document.getElementById('middle').innerHTML = '';
     });
     let face_row = -1;
     let face_col = -1;
@@ -245,8 +97,7 @@ function openCvReady() {
                 console.log("time: ", time, " face size: "+ faces.size());
             }catch(err){
                 console.log(err);
-            }
-            for (let i = 0; i < faces.size(); ++i) {
+            }for (let i = 0; i < faces.size(); ++i) {
                 let face = faces.get(i);
                 console.log('face (' + i + ') ' + [face.x, face.y, face.width, face.height]);
                 let face_row = parseInt(face.y/clip_height);
@@ -291,9 +142,7 @@ function Utils() {
             }
         };
         request.send();
-        
     };
-
     const OPENCV_URL = 'opencv.js';
     this.loadOpenCv = function(onloadCallback) {
         let script = document.createElement('script');
@@ -328,6 +177,3 @@ function Utils() {
         node.parentNode.insertBefore(script, node);
     };
 }
-
-</script>
-</html>
